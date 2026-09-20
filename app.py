@@ -89,7 +89,43 @@ st.markdown("""
         box-shadow: 0 0 6px rgba(243, 156, 18, 0.5) !important;
     }
     
-    /* Textos placeholder dos inputs mais claros para visualização */
+    /* Correção total do Dropdown/Popover (Selectbox e DateInput nativos do Streamlit) para tema escuro */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], div[data-baseweb="calendar"] {
+        background-color: #141414 !important;
+        color: #ffffff !important;
+        border: 1px solid #333333 !important;
+        border-radius: 6px !important;
+    }
+    
+    /* Itens de listas suspensas (Selectbox dropdown options) */
+    div[data-baseweb="menu"] ul, div[data-baseweb="menu"] li {
+        background-color: #141414 !important;
+        color: #ffffff !important;
+    }
+    div[data-baseweb="menu"] li:hover {
+        background-color: #222222 !important;
+        color: #f39c12 !important;
+    }
+
+    /* Estilização do Mini Calendário (Date Picker Popup) */
+    div[data-baseweb="calendar"] header, div[data-baseweb="calendar"] div {
+        background-color: #141414 !important;
+        color: #ffffff !important;
+    }
+    div[data-baseweb="calendar"] button {
+        color: #ffffff !important;
+    }
+    div[data-baseweb="calendar"] button:hover {
+        background-color: #222222 !important;
+        color: #f39c12 !important;
+    }
+    /* Dia selecionado no mini calendário */
+    aria-selected="true" {
+        background-color: #f39c12 !important;
+        color: #000000 !important;
+    }
+
+    /* Textos placeholder dos inputs */
     input::placeholder {
         color: #888888 !important;
         opacity: 1;
@@ -120,9 +156,48 @@ st.markdown("""
         border-radius: 6px;
     }
 
-    /* Ajustes minimalistas para o calendário */
-    .fc-daygrid-event-dot {
-        display: none !important;
+    /* --- TEMA ESCURO PARA O CALENDÁRIO VISUAL (FullCalendar) --- */
+    .fc {
+        background-color: #0d0d0d !important;
+        color: #ffffff !important;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid {
+        border-color: #262626 !important;
+    }
+    .fc-daygrid-day {
+        background-color: #121212 !important;
+    }
+    .fc-daygrid-day:hover {
+        background-color: #1a1a1a !important;
+    }
+    .fc-col-header-cell-cushion, .fc-daygrid-day-number {
+        color: #ffffff !important;
+        font-weight: 600;
+    }
+    .fc-day-today {
+        background-color: #1f1b11 !important;
+    }
+    .fc-toolbar-title {
+        color: #f39c12 !important;
+        font-size: 1.2rem !important;
+        font-weight: 600 !important;
+    }
+    .fc-button {
+        background-color: #1f1f1f !important;
+        border: 1px solid #333333 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    .fc-button:hover {
+        background-color: #f39c12 !important;
+        color: #000000 !important;
+        border-color: #f39c12 !important;
+    }
+    .fc-button-active {
+        background-color: #f39c12 !important;
+        color: #000000 !important;
     }
     .fc-event-title {
         font-size: 11px !important;
@@ -130,7 +205,7 @@ st.markdown("""
         white-space: normal !important;
     }
     .fc-event {
-        padding: 2px 4px !important;
+        padding: 3px 6px !important;
         margin-bottom: 2px !important;
         background-color: #1a1a1a !important;
         border-left: 3px solid #f39c12 !important;
@@ -138,11 +213,6 @@ st.markdown("""
         border-top: none !important;
         border-bottom: none !important;
         color: #ffffff !important;
-    }
-    .fc-toolbar-title {
-        color: #f39c12 !important;
-        font-size: 1.2rem !important;
-        font-weight: 600 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -332,9 +402,9 @@ elif aba == "📆 Calendário":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v14")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v15")
 
-# --- ABA 3: CADASTRAR CLIENTE ---
+# --- ABA 3: CADASTRAR CLIENTE (Com máscara de telefone) ---
 elif aba == "🎸 Clientes":
     st.header("🎸 Cadastro de Clientes e Bandas")
     st.write("Adicione novos registros para preenchimento rápido nos agendamentos.")
@@ -342,18 +412,28 @@ elif aba == "🎸 Clientes":
     with st.form("form_cadastrar_cliente"):
         novo_nome_banda = st.text_input("Nome da Banda *")
         novo_nome_cliente = st.text_input("Nome do Cliente / Responsável *")
-        novo_whatsapp = st.text_input("Telefone (WhatsApp) *", placeholder="11976297814")
+        
+        # Máscara e formatação de telefone celular (DDD + 9 dígitos)
+        novo_whatsapp = st.text_input("Telefone (WhatsApp) *", placeholder="(11) 99999-9999", max_chars=15)
         tipo_cliente = st.selectbox("Tipo de Cliente", ["Avulso", "Mensalista"])
         
         sub_cadastro = st.form_submit_button("Gerar Registro para Planilha", use_container_width=True)
         
         if sub_cadastro:
-            if not novo_nome_banda or not novo_nome_cliente or not novo_whatsapp:
-                st.error("Por favor, preencha todos os campos obrigatórios.")
+            # Tratamento da máscara para salvar limpo na planilha se necessário, ou mantendo o formato amigável
+            tel_digits = "".join(filter(str.isdigit, novo_whatsapp))
+            if not novo_nome_banda or not novo_nome_cliente or len(tel_digits) < 10:
+                st.error("Por favor, preencha todos os campos obrigatórios corretamente (verifique o telefone com DDD).")
             else:
+                # Formata bonito para exibir na instrução
+                if len(tel_digits) == 11:
+                    tel_formatado = f"({tel_digits[:2]}) {tel_digits[2:7]}-{tel_digits[7:]}"
+                else:
+                    tel_formatado = novo_whatsapp
+
                 st.success(f"Registro gerado com sucesso!")
                 st.warning("⚠️ Copie a linha abaixo e cole na aba **'Clientes'** da sua Planilha do Google Sheets:")
-                st.code(f"{novo_nome_banda}\t{novo_nome_cliente}\t{novo_whatsapp}\t{tipo_cliente}")
+                st.code(f"{novo_nome_banda}\t{novo_nome_cliente}\t{tel_formatado}\t{tipo_cliente}")
 
 # --- ABA 4: AGENDAR ENSAIO ---
 elif aba == "➕ Novo Ensaio":
@@ -402,7 +482,7 @@ elif aba == "➕ Novo Ensaio":
     with st.form("form_agendamento"):
         nome_banda = st.text_input("Nome da Banda *", value=val_banda)
         nome_cliente = st.text_input("Nome do Cliente *", value=val_cliente)
-        telefone_cliente = st.text_input("Telefone (WhatsApp) *", value=val_telefone, placeholder="11976297814")
+        telefone_cliente = st.text_input("Telefone (WhatsApp) *", value=val_telefone, placeholder="(11) 99999-9999")
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -556,7 +636,7 @@ elif aba == "⚙️ Admin":
         with st.form("form_blacklist"):
             bl_banda = st.text_input("Banda *")
             bl_cliente = st.text_input("Cliente / Responsável *")
-            bl_tel = st.text_input("Telefone *")
+            bl_tel = st.text_input("Telefone *", placeholder="(11) 99999-9999")
             bl_data = st.date_input("Data do Ocorrido *", datetime.date.today())
             bl_motivo = st.text_input("Motivo", value="Falta sem aviso")
             
