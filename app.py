@@ -2,12 +2,13 @@ import streamlit as st
 import datetime
 import pandas as pd
 import urllib.parse
+import os
 from streamlit_calendar import calendar
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎵", layout="wide")
 
-# CSS Personalizado
+# CSS Personalizado para o Calendário e Elementos da Interface
 st.markdown("""
 <style>
     .fc-daygrid-event-dot {
@@ -41,7 +42,12 @@ def carregar_dados_aba(nome_aba):
 
 # --- LOGIN DOS SÓCIOS ---
 def login():
-    st.title("🔑 Login - Estúdio Ómega")
+    # Se a logo existir, exibe na tela de login
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=200)
+    else:
+        st.title("🔑 Login - Estúdio Ómega")
+        
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
     
@@ -106,6 +112,10 @@ def gerar_link_whatsapp(telefone, mensagem):
     return f"https://api.whatsapp.com/send?phone={tel_limpo}&text={msg_enc}"
 
 # --- INTERFACE PRINCIPAL ---
+# Exibir Logo na Barra Lateral se o arquivo existir
+if os.path.exists("logo.png"):
+    st.sidebar.image("logo.png", use_container_width=True)
+
 st.sidebar.title(f"Bem-vindo, {st.session_state['user']}")
 if st.sidebar.button("Sair"):
     st.session_state["authenticated"] = False
@@ -187,9 +197,9 @@ elif aba == "📆 Calendário Mensal":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v6")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v7")
 
-# --- ABA 3: AGENDAR ENSAIO (COM VALIDAÇÃO DE BLACKLIST) ---
+# --- ABA 3: AGENDAR ENSAIO ---
 elif aba == "➕ Agendar Ensaio":
     st.header("➕ Novo Agendamento")
     
@@ -215,7 +225,7 @@ elif aba == "➕ Agendar Ensaio":
             if not nome_cliente or not telefone_cliente or not nome_banda:
                 st.error("Por favor, preencha todos os campos obrigatórios.")
             else:
-                # Verificar se o cliente/banda/telefone está na Blacklist
+                # Verificar Blacklist
                 bloqueado = False
                 motivo_bloqueio = ""
                 if not df_blacklist.empty:
@@ -303,7 +313,6 @@ elif aba == "⚙️ Administração":
         st.subheader("📊 Estatísticas do Estúdio")
         
         if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
-            # Converter datas
             df_agendamentos["DT"] = pd.to_datetime(df_agendamentos["DATA"], format="%d/%m/%Y", errors="coerce")
             df_val = df_agendamentos.dropna(subset=["DT"]).copy()
             
@@ -347,7 +356,6 @@ elif aba == "⚙️ Administração":
             df_fin = df_fin.dropna(subset=["DT"])
             df_fin["MES_ANO"] = df_fin["DT"].dt.strftime("%m/%Y")
             
-            # Limpar coluna de valor (remover R$, converter vírgula)
             def limpar_valor(v):
                 try:
                     v_str = str(v).replace("R$", "").replace(".", "").replace(",", ".").strip()
