@@ -331,7 +331,7 @@ elif aba == "➕ Novo Ensaio":
     with col_btn_novo:
         st.write("")
         if st.button("Novo Cadastro", use_container_width=True):
-            .info("Vá em 'Clientes' no menu lateral.")
+            st.info("Vá em 'Clientes' no menu lateral.")
 
     val_banda = ""
     val_cliente = ""
