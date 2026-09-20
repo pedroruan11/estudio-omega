@@ -4,25 +4,44 @@ import pandas as pd
 import urllib.parse
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Gestão de Ensaio - Estúdio", page_icon="🎵", layout="centered")
+st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎵", layout="centered")
+
+# ID da Planilha do Google Sheets
+SHEET_ID = "1Cpz09lM3tPnx1kG2pk4UAKR3bgIQ8WPmMJnRP6EpLEY"
+
+# --- CARREGAR DADOS DA PLANILHA ---
+@st.cache_data(ttl=10)
+def carregar_dados_aba(nome_aba):
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nome_aba}"
+    try:
+        return pd.read_csv(url)
+    except Exception as e:
+        return pd.DataFrame()
 
 # --- LOGIN DOS SÓCIOS ---
-USERS = {
-    "socio1": "senha123",
-    "socio2": "senha456"
-}
-
 def login():
-    st.title("🔑 Login - Estúdio de Música")
+    st.title("🔑 Login - Estúdio Ómega")
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
+    
     if st.button("Entrar"):
-        if username in USERS and USERS[username] == password:
-            st.session_state["authenticated"] = True
-            st.session_state["user"] = username
-            st.rerun()
+        df_users = carregar_dados_aba("Administradores")
+        if not df_users.empty and "USUÁRIO" in df_users.columns:
+            user_row = df_users[(df_users["USUÁRIO"].astype(str) == username) & (df_users["SENHA"].astype(str) == password)]
+            if not user_row.empty:
+                st.session_state["authenticated"] = True
+                st.session_state["user"] = user_row.iloc[0]["NOME"]
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
         else:
-            st.error("Usuário ou senha incorretos.")
+            # Fallback de emergência para primeiro acesso
+            if (username == "socio1" and password == "senha123") or (username == "socio2" and password == "senha456"):
+                st.session_state["authenticated"] = True
+                st.session_state["user"] = username
+                st.rerun()
+            else:
+                st.error("Erro ao validar dados na planilha.")
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -43,7 +62,7 @@ def validar_agendamento(data, hora_inicio, hora_fim, eh_mensalista):
         
     # Validar Horário de Funcionamento
     if dia_semana < 5: # Segunda a Sexta
-        if hora_inicio < datetime.time(18, 0) or hora_fim > datetime.time(0, 0) and hora_fim != datetime.time(0, 0):
+        if hora_inicio < datetime.time(18, 0) or (hora_fim > datetime.time(0, 0) and hora_fim != datetime.time(0, 0) and hora_fim < datetime.time(18, 0)):
             return False, "De segunda a sexta o estúdio funciona das 18:00 às 00:00."
     else: # Fim de semana
         if hora_inicio < datetime.time(10, 0) or hora_fim > datetime.time(22, 0):
@@ -55,9 +74,7 @@ def validar_agendamento(data, hora_inicio, hora_fim, eh_mensalista):
     
     return True, valor_total
 
-# --- FUNÇÃO DE MENSAGENS WHATSAPP ---
 def gerar_link_whatsapp(telefone, mensagem):
-    # Remove caracteres não numéricos do telefone
     tel_limpo = "".join(filter(str.isdigit, str(telefone)))
     if not tel_limpo.startswith("55"):
         tel_limpo = "55" + tel_limpo
@@ -72,25 +89,23 @@ if st.sidebar.button("Sair"):
 
 aba = st.sidebar.radio("Navegação", ["📅 Ver Agenda", "➕ Agendar Ensaio", "💬 Disparos WhatsApp"])
 
-# Simulação de Base de Dados (Conectar ao Google Sheets via gspread em produção)
-if "agendamentos" not in st.session_state:
-    st.session_state["agendamentos"] = pd.DataFrame([
-        {"Data": "2026-09-01", "Início": "21:00", "Fim": "23:00", "Cliente": "Star Lord", "Banda": "Star Lord", "Telefone": "11999999999", "Tipo": "Avulso", "Valor": 140.0},
-        {"Data": "2026-09-05", "Início": "10:00", "Fim": "12:00", "Cliente": "Duzeck", "Banda": "Duzeck", "Telefone": "11988888888", "Tipo": "Avulso", "Valor": 140.0}
-    ])
+df_agendamentos = carregar_dados_aba("Agendamentos")
 
 # --- ABA 1: VER AGENDA ---
 if aba == "📅 Ver Agenda":
     st.header("📅 Agenda de Ensaios")
     data_filtro = st.date_input("Filtrar por data:", datetime.date.today())
+    data_str = data_filtro.strftime("%d/%m/%Y")
     
-    df = st.session_state["agendamentos"]
-    agendamentos_dia = df[df["Data"] == str(data_filtro)]
-    
-    if not agendamentos_dia.empty:
-        st.subheader(f"Agendamentos para {data_filtro.strftime('%d/%m/%Y')}:")
-        for idx, row in agendamentos_dia.iterrows():
-            st.info(f"⏰ **{row['Início']} - {row['Fim']}** | Banda: **{row['Banda']}** ({row['Cliente']}) | 💰 R$ {row['Valor']:.2f}")
+    if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
+        agendamentos_dia = df_agendamentos[df_agendamentos["DATA"].astype(str) == data_str]
+        
+        if not agendamentos_dia.empty:
+            st.subheader(f"Agendamentos para {data_str}:")
+            for idx, row in agendamentos_dia.iterrows():
+                st.info(f"⏰ **{row['HORÁRIO INICIAL']} - {row['HORÁRIO FINAL']}** | Banda: **{row['NOME DA BANDA']}** ({row['NOME DO CLIENTE']}) | 💰 {row['VALOR TOTAL']}")
+        else:
+            st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
     else:
         st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
 
@@ -124,20 +139,14 @@ elif aba == "➕ Agendar Ensaio":
                     st.error(f"Erro no agendamento: {resultado}")
                 else:
                     valor_total = resultado
-                    novo_agendamento = {
-                        "Data": str(data),
-                        "Início": hora_inicio.strftime("%H:%M"),
-                        "Fim": hora_fim.strftime("%H:%M"),
-                        "Cliente": nome_cliente,
-                        "Banda": nome_banda,
-                        "Telefone": telefone_cliente,
-                        "Tipo": "Mensalista" if eh_mensalista else "Avulso",
-                        "Valor": valor_total
-                    }
-                    st.session_state["agendamentos"] = pd.concat([st.session_state["agendamentos"], pd.DataFrame([novo_agendamento])], ignore_index=True)
-                    st.success(f"Ensaio agendado com sucesso! Valor Total: R$ {valor_total:.2f}")
+                    st.success(f"Ensaio validado! Valor Total: R$ {valor_total:.2f}")
                     
-                    # Gerar mensagem de confirmação para o WhatsApp
+                    # Link para o usuário adicionar na planilha
+                    st.warning("⚠️ Adicione a linha abaixo na sua Planilha do Google Sheets para salvar:")
+                    dias_semana_pt = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
+                    dia_str = dias_semana_pt[data.weekday()]
+                    st.code(f"{data.strftime('%d/%m/%Y')}\t{dia_str}\t{hora_inicio.strftime('%H:%M')}\t{hora_fim.strftime('%H:%M')}\t{nome_cliente}\t{telefone_cliente}\t{nome_banda}\t{'Mensalista' if eh_mensalista else 'Avulso'}\tR$ {valor_total:.2f}\tConfirmado")
+                    
                     msg_confirmacao = f"Olá {nome_cliente}! Seus ensaio com a banda {nome_banda} está CONFIRMADO para o dia {data.strftime('%d/%m/%Y')} das {hora_inicio.strftime('%H:%M')} às {hora_fim.strftime('%H:%M')}. Valor: R$ {valor_total:.2f}. Nos vemos no estúdio!"
                     link_wa = gerar_link_whatsapp(telefone_cliente, msg_confirmacao)
                     
@@ -146,19 +155,20 @@ elif aba == "➕ Agendar Ensaio":
 # --- ABA 3: DISPAROS WHATSAPP ---
 elif aba == "💬 Disparos WhatsApp":
     st.header("💬 Lembrete do Dia")
-    st.write("Envie a mensagem de lembrete do dia com apenas 1 clique.")
+    hoje_str = datetime.date.today().strftime("%d/%m/%Y")
     
-    hoje_str = str(datetime.date.today())
-    df = st.session_state["agendamentos"]
-    agendamentos_hoje = df[df["Data"] == hoje_str]
-    
-    if not agendamentos_hoje.empty:
-        for idx, row in agendamentos_hoje.iterrows():
-            msg_lembrete = f"Olá {row['Cliente']}, lembrete: Hoje é dia de ensaio com a banda {row['Banda']} das {row['Início']} às {row['Fim']}. Esperamos vocês!"
-            link = gerar_link_whatsapp(row["Telefone"], msg_lembrete)
-            
-            st.write(f"🎸 **Banda {row['Banda']}** ({row['Início']} - {row['Fim']})")
-            st.markdown(f"[📲 Enviar WhatsApp para {row['Cliente']}]({link})")
-            st.divider()
+    if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
+        agendamentos_hoje = df_agendamentos[df_agendamentos["DATA"].astype(str) == hoje_str]
+        
+        if not agendamentos_hoje.empty:
+            for idx, row in agendamentos_hoje.iterrows():
+                msg_lembrete = f"Olá {row['NOME DO CLIENTE']}, lembrete: Hoje é dia de ensaio com a banda {row['NOME DA BANDA']} das {row['HORÁRIO INICIAL']} às {row['HORÁRIO FINAL']}. Esperamos vocês!"
+                link = gerar_link_whatsapp(row["TELEFONE"], msg_lembrete)
+                
+                st.write(f"🎸 **Banda {row['NOME DA BANDA']}** ({row['HORÁRIO INICIAL']} - {row['HORÁRIO FINAL']})")
+                st.markdown(f"[📲 Enviar WhatsApp para {row['NOME DO CLIENTE']}]({link})")
+                st.divider()
+        else:
+            st.info("Não há ensaios marcados para o dia de hoje.")
     else:
         st.info("Não há ensaios marcados para o dia de hoje.")
