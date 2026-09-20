@@ -42,7 +42,6 @@ def carregar_dados_aba(nome_aba):
 
 # --- LOGIN DOS SÓCIOS ---
 def login():
-    # Se a logo existir, exibe na tela de login
     if os.path.exists("logo.png"):
         st.image("logo.png", width=200)
     else:
@@ -112,7 +111,6 @@ def gerar_link_whatsapp(telefone, mensagem):
     return f"https://api.whatsapp.com/send?phone={tel_limpo}&text={msg_enc}"
 
 # --- INTERFACE PRINCIPAL ---
-# Exibir Logo na Barra Lateral se o arquivo existir
 if os.path.exists("logo.png"):
     st.sidebar.image("logo.png", use_container_width=True)
 
@@ -121,10 +119,12 @@ if st.sidebar.button("Sair"):
     st.session_state["authenticated"] = False
     st.rerun()
 
-aba = st.sidebar.radio("Navegação", ["📅 Ver Agenda", "📆 Calendário Mensal", "➕ Agendar Ensaio", "💬 Disparos WhatsApp", "⚙️ Administração"])
+aba_opcoes = ["📅 Ver Agenda", "📆 Calendário Mensal", "🎸 Cadastrar Cliente", "➕ Agendar Ensaio", "💬 Disparos WhatsApp", "⚙️ Administração"]
+aba = st.sidebar.radio("Navegação", aba_opcoes)
 
 df_agendamentos = carregar_dados_aba("Agendamentos")
 df_blacklist = carregar_dados_aba("Blacklist")
+df_clientes = carregar_dados_aba("Clientes")  # Lê especificamente a aba de Clientes
 
 # --- ABA 1: VER AGENDA ---
 if aba == "📅 Ver Agenda":
@@ -197,16 +197,76 @@ elif aba == "📆 Calendário Mensal":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v7")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v10")
 
-# --- ABA 3: AGENDAR ENSAIO ---
+# --- ABA 3: CADASTRAR CLIENTE ---
+elif aba == "🎸 Cadastrar Cliente":
+    st.header("🎸 Cadastrar Novo Cliente / Banda")
+    st.write("Cadastre as informações para facilitar o preenchimento automático nos agendamentos.")
+    
+    with st.form("form_cadastrar_cliente"):
+        novo_nome_banda = st.text_input("Nome da Banda *")
+        novo_nome_cliente = st.text_input("Nome do Cliente / Responsável *")
+        novo_whatsapp = st.text_input("Telefone (WhatsApp) *", placeholder="11976297814")
+        
+        sub_cadastro = st.form_submit_button("Gerar Registro de Cliente")
+        
+        if sub_cadastro:
+            if not novo_nome_banda or not novo_nome_cliente or not novo_whatsapp:
+                st.error("Por favor, preencha todos os campos obrigatórios.")
+            else:
+                st.success(f"Registro do cliente **{novo_nome_cliente}** ({novo_nome_banda}) gerado com sucesso!")
+                st.warning("⚠️ Cole a linha abaixo na aba **'Clientes'** da sua Planilha do Google Drive:")
+                st.code(f"{novo_nome_banda}\t{novo_nome_cliente}\t{novo_whatsapp}")
+
+# --- ABA 4: AGENDAR ENSAIO ---
 elif aba == "➕ Agendar Ensaio":
     st.header("➕ Novo Agendamento")
     
+    opcoes_banda = ["-- Selecionar da base de clientes --"]
+    mapa_cadastros = {}
+    
+    if not df_clientes.empty:
+        col_b = "NOME DA BANDA" if "NOME DA BANDA" in df_clientes.columns else df_clientes.columns[0]
+        col_c = "NOME DO CLIENTE" if "NOME DO CLIENTE" in df_clientes.columns else df_clientes.columns[1]
+        col_t = "TELEFONE" if "TELEFONE" in df_clientes.columns else df_clientes.columns[2]
+        
+        for idx, r in df_clientes.iterrows():
+            b_nome = str(r.get(col_b, '')).strip()
+            c_nome = str(r.get(col_c, '')).strip()
+            t_num = str(r.get(col_t, '')).strip()
+            
+            if b_nome and b_nome != 'nan':
+                label = f"{b_nome} (Resp: {c_nome})"
+                opcoes_banda.append(label)
+                mapa_cadastros[label] = {
+                    "banda": b_nome,
+                    "cliente": c_nome,
+                    "telefone": t_num
+                }
+
+    col_sel, col_btn_novo = st.columns([3, 1])
+    with col_sel:
+        banda_selecionada = st.selectbox("Selecione um cliente da base:", opcoes_banda)
+    with col_btn_novo:
+        st.write("")
+        if st.button("➕ Novo Cliente", type="secondary"):
+            st.info("Acesse a aba '🎸 Cadastrar Cliente' no menu lateral para adicionar novos cadastros!")
+
+    val_banda = ""
+    val_cliente = ""
+    val_telefone = ""
+    
+    if banda_selecionada != "-- Selecionar da base de clientes --":
+        dados_sel = mapa_cadastros[banda_selecionada]
+        val_banda = dados_sel["banda"]
+        val_cliente = dados_sel["cliente"]
+        val_telefone = dados_sel["telefone"]
+
     with st.form("form_agendamento"):
-        nome_cliente = st.text_input("Nome do Cliente *")
-        telefone_cliente = st.text_input("Telefone (WhatsApp) *", placeholder="11976297814")
-        nome_banda = st.text_input("Nome da Banda *")
+        nome_banda = st.text_input("Nome da Banda *", value=val_banda)
+        nome_cliente = st.text_input("Nome do Cliente *", value=val_cliente)
+        telefone_cliente = st.text_input("Telefone (WhatsApp) *", value=val_telefone, placeholder="11976297814")
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -225,7 +285,6 @@ elif aba == "➕ Agendar Ensaio":
             if not nome_cliente or not telefone_cliente or not nome_banda:
                 st.error("Por favor, preencha todos os campos obrigatórios.")
             else:
-                # Verificar Blacklist
                 bloqueado = False
                 motivo_bloqueio = ""
                 if not df_blacklist.empty:
@@ -260,7 +319,7 @@ elif aba == "➕ Agendar Ensaio":
                         
                         st.markdown(f"[📲 Enviar Confirmação via WhatsApp]({link_wa})", unsafe_allow_html=True)
 
-# --- ABA 4: DISPAROS WHATSAPP ---
+# --- ABA 5: DISPAROS WHATSAPP ---
 elif aba == "💬 Disparos WhatsApp":
     st.header("💬 Lembrete do Dia")
     hoje_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -287,7 +346,7 @@ elif aba == "💬 Disparos WhatsApp":
     else:
         st.info("Não há ensaios marcados para o dia de hoje.")
 
-# --- ABA 5: ADMINISTRAÇÃO ---
+# --- ABA 6: ADMINISTRAÇÃO ---
 elif aba == "⚙️ Administração":
     st.header("⚙️ Painel de Administração")
     
@@ -329,7 +388,7 @@ elif aba == "⚙️ Administração":
             st.metric("Total de Ensaios no Mês Selecionado", len(df_mes))
             
             st.divider()
-            st.subheader("🏆 Ranking de Bandas")
+            st.subheader("🏆 Ranking de Bandas que Mais Ensaiarem")
             
             tipo_ranking = st.radio("Visualizar Ranking por:", ["Por Mês", "Por Ano"], horizontal=True)
             
