@@ -119,11 +119,6 @@ st.markdown("""
         background-color: #222222 !important;
         color: #f39c12 !important;
     }
-    /* Dia selecionado no mini calendário */
-    aria-selected="true" {
-        background-color: #f39c12 !important;
-        color: #000000 !important;
-    }
 
     /* Textos placeholder dos inputs */
     input::placeholder {
@@ -156,7 +151,7 @@ st.markdown("""
         border-radius: 6px;
     }
 
-    /* --- TEMA ESCURO PARA O CALENDÁRIO VISUAL (FullCalendar) --- */
+    /* --- TEMA ESCURO ROBUSTO PARA O CALENDÁRIO VISUAL (FullCalendar) --- */
     .fc {
         background-color: #0d0d0d !important;
         color: #ffffff !important;
@@ -165,6 +160,7 @@ st.markdown("""
     }
     .fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid {
         border-color: #262626 !important;
+        background-color: #0d0d0d !important;
     }
     .fc-daygrid-day {
         background-color: #121212 !important;
@@ -172,12 +168,24 @@ st.markdown("""
     .fc-daygrid-day:hover {
         background-color: #1a1a1a !important;
     }
+    .fc-col-header-cell {
+        background-color: #161616 !important;
+    }
     .fc-col-header-cell-cushion, .fc-daygrid-day-number {
         color: #ffffff !important;
         font-weight: 600;
     }
+    /* Dias de outros meses que aparecem no grid */
+    .fc-day-other .fc-daygrid-day-number {
+        color: #555555 !important;
+    }
     .fc-day-today {
         background-color: #1f1b11 !important;
+    }
+    .fc-toolbar {
+        background-color: #121212 !important;
+        padding: 10px;
+        border-radius: 6px;
     }
     .fc-toolbar-title {
         color: #f39c12 !important;
@@ -402,9 +410,9 @@ elif aba == "📆 Calendário":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v15")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v16")
 
-# --- ABA 3: CADASTRAR CLIENTE (Com máscara de telefone) ---
+# --- ABA 3: CADASTRAR CLIENTE ---
 elif aba == "🎸 Clientes":
     st.header("🎸 Cadastro de Clientes e Bandas")
     st.write("Adicione novos registros para preenchimento rápido nos agendamentos.")
@@ -412,20 +420,16 @@ elif aba == "🎸 Clientes":
     with st.form("form_cadastrar_cliente"):
         novo_nome_banda = st.text_input("Nome da Banda *")
         novo_nome_cliente = st.text_input("Nome do Cliente / Responsável *")
-        
-        # Máscara e formatação de telefone celular (DDD + 9 dígitos)
         novo_whatsapp = st.text_input("Telefone (WhatsApp) *", placeholder="(11) 99999-9999", max_chars=15)
         tipo_cliente = st.selectbox("Tipo de Cliente", ["Avulso", "Mensalista"])
         
         sub_cadastro = st.form_submit_button("Gerar Registro para Planilha", use_container_width=True)
         
         if sub_cadastro:
-            # Tratamento da máscara para salvar limpo na planilha se necessário, ou mantendo o formato amigável
             tel_digits = "".join(filter(str.isdigit, novo_whatsapp))
             if not novo_nome_banda or not novo_nome_cliente or len(tel_digits) < 10:
                 st.error("Por favor, preencha todos os campos obrigatórios corretamente (verifique o telefone com DDD).")
             else:
-                # Formata bonito para exibir na instrução
                 if len(tel_digits) == 11:
                     tel_formatado = f"({tel_digits[:2]}) {tel_digits[2:7]}-{tel_digits[7:]}"
                 else:
