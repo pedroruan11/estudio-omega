@@ -8,86 +8,118 @@ from streamlit_calendar import calendar
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎸", layout="wide")
 
-# --- DESIGN SYSTEM: TEMA ESCURO COM LARANJA/DOURADO ---
+# --- DESIGN SYSTEM: TEMA ESCURO PROFISSIONAL & ALTO CONTRASTE ---
 st.markdown("""
 <style>
-    /* Cores Globais e Fundo Geral */
+    /* Importando fonte profissional (Inter) */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /* Cores Globais e Tipografia Geral */
     .stApp {
-        background-color: #0d0d0d;
-        color: #e0e0e0;
+        background-color: #000000;
+        color: #ffffff;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    
+    /* Garantir que textos comuns, labels e parágrafos fiquem bem brancos/legíveis */
+    p, span, label, div, .stMarkdown, .stText {
+        color: #f1f1f1 !important;
+        font-family: 'Inter', sans-serif;
     }
     
     /* Barra Lateral (Sidebar) */
     [data-testid="stSidebar"] {
-        background-color: #141414;
-        border-right: 1px solid #222222;
+        background-color: #0c0c0c;
+        border-right: 1px solid #1f1f1f;
+    }
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
+        color: #e0e0e0 !important;
     }
     
-    /* Esconde as bolinhas (radio buttons) nativas do menu lateral para um visual mais limpo */
+    /* Esconde as bolinhas (radio buttons) nativas do menu lateral */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label div:first-child {
         display: none !important;
     }
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
         background-color: transparent;
-        padding: 6px 10px;
+        padding: 8px 12px;
         border-radius: 6px;
         transition: background 0.2s;
+        margin-bottom: 4px;
     }
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
-        background-color: #1f1f1f;
+        background-color: #1a1a1a;
         cursor: pointer;
     }
     
-    /* Títulos e Cabeçalhos */
+    /* Títulos e Cabeçalhos com destaque elegante */
     h1, h2, h3, h4, h5, h6 {
         color: #f39c12 !important;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
     }
     
     /* Botões Principais */
     .stButton>button {
         background-color: #f39c12;
-        color: #0d0d0d;
+        color: #000000;
         border: none;
         border-radius: 6px;
         font-weight: 600;
+        font-family: 'Inter', sans-serif;
         padding: 0.5rem 1rem;
         transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        background-color: #e67e22;
+        background-color: #d68910;
         color: #ffffff;
-        box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+        box-shadow: 0 4px 14px rgba(243, 156, 18, 0.4);
     }
     
-    /* Inputs, Selectbox e Campos de Texto */
+    /* Inputs, Selectbox e Campos de Texto altamente legíveis */
     .stTextInput>div>div>input, .stSelectbox>div>div>select, .stDateInput>div>div>input, .stTimeInput>div>div>input {
-        background-color: #1a1a1a;
-        color: #ffffff;
-        border: 1px solid #333333;
-        border-radius: 6px;
+        background-color: #121212 !important;
+        color: #ffffff !important;
+        border: 1px solid #333333 !important;
+        border-radius: 6px !important;
+        font-family: 'Inter', sans-serif !important;
     }
     .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
-        border-color: #f39c12;
-        box-shadow: 0 0 5px rgba(243, 156, 18, 0.4);
+        border-color: #f39c12 !important;
+        box-shadow: 0 0 6px rgba(243, 156, 18, 0.5) !important;
     }
     
+    /* Textos placeholder dos inputs mais claros para visualização */
+    input::placeholder {
+        color: #888888 !important;
+        opacity: 1;
+    }
+
     /* Cards de Informação e Alertas */
     .stAlert {
-        background-color: #1a1a1a;
-        border: 1px solid #333333;
-        color: #f0f0f0;
+        background-color: #121212;
+        border: 1px solid #262626;
+        color: #ffffff !important;
         border-radius: 6px;
     }
     
     /* Métricas */
     [data-testid="stMetricValue"] {
         color: #f39c12 !important;
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
     }
     [data-testid="stMetricLabel"] {
-        color: #aaaaaa !important;
+        color: #bbbbbb !important;
+        font-family: 'Inter', sans-serif !important;
     }
     
+    /* Tabelas e Dataframes */
+    [data-testid="stDataFrame"] {
+        border: 1px solid #222222;
+        border-radius: 6px;
+    }
+
     /* Ajustes minimalistas para o calendário */
     .fc-daygrid-event-dot {
         display: none !important;
@@ -100,15 +132,17 @@ st.markdown("""
     .fc-event {
         padding: 2px 4px !important;
         margin-bottom: 2px !important;
-        background-color: #1f1f1f !important;
+        background-color: #1a1a1a !important;
         border-left: 3px solid #f39c12 !important;
         border-right: none !important;
         border-top: none !important;
         border-bottom: none !important;
+        color: #ffffff !important;
     }
     .fc-toolbar-title {
         color: #f39c12 !important;
         font-size: 1.2rem !important;
+        font-weight: 600 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -141,7 +175,7 @@ def login():
             else:
                 st.markdown("<h2 style='text-align: center; color: #f39c12; margin-bottom: 0px;'>⚡ ESTÚDIO ÓMEGA</h2>", unsafe_allow_html=True)
                 
-            st.markdown("<p style='text-align: center; color: #888; font-size: 0.9rem; margin-bottom: 25px;'>Painel de Gestão Restrito</p>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #cccccc; font-size: 0.95rem; margin-bottom: 25px;'>Painel de Gestão Restrito</p>", unsafe_allow_html=True)
             
             username = st.text_input("Usuário", placeholder="Digite seu usuário")
             password = st.text_input("Senha", type="password", placeholder="••••••••")
@@ -298,7 +332,7 @@ elif aba == "📆 Calendário":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v13")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v14")
 
 # --- ABA 3: CADASTRAR CLIENTE ---
 elif aba == "🎸 Clientes":
