@@ -2,9 +2,10 @@ import streamlit as st
 import datetime
 import pandas as pd
 import urllib.parse
+from streamlit_calendar import calendar
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎵", layout="centered")
+st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎵", layout="wide")
 
 # ID da Planilha do Google Sheets
 SHEET_ID = "1Cpz09lM3tPnx1kG2pk4UAKR3bgIQ8WPmMJnRP6EpLEY"
@@ -14,7 +15,10 @@ SHEET_ID = "1Cpz09lM3tPnx1kG2pk4UAKR3bgIQ8WPmMJnRP6EpLEY"
 def carregar_dados_aba(nome_aba):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nome_aba}"
     try:
-        return pd.read_csv(url)
+        df = pd.read_csv(url)
+        # Limpar espaços nos nomes das colunas
+        df.columns = df.columns.str.strip()
+        return df
     except Exception as e:
         return pd.DataFrame()
 
@@ -35,7 +39,6 @@ def login():
             else:
                 st.error("Usuário ou senha incorretos.")
         else:
-            # Fallback de emergência para primeiro acesso
             if (username == "socio1" and password == "senha123") or (username == "socio2" and password == "senha456"):
                 st.session_state["authenticated"] = True
                 st.session_state["user"] = username
@@ -52,23 +55,19 @@ if not st.session_state["authenticated"]:
 
 # --- REGRAS DE NEGÓCIO E VALIDAÇÃO ---
 def validar_agendamento(data, hora_inicio, hora_fim, eh_mensalista):
-    dia_semana = data.weekday() # 0-4: Segunda a Sexta, 5-6: Sábado e Domingo
-    
-    # Duração em horas
+    dia_semana = data.weekday()
     duracao = (datetime.datetime.combine(data, hora_fim) - datetime.datetime.combine(data, hora_inicio)).seconds / 3600
     
     if duracao < 2:
         return False, "A locação mínima é de 2 horas por banda."
         
-    # Validar Horário de Funcionamento
-    if dia_semana < 5: # Segunda a Sexta
+    if dia_semana < 5:
         if hora_inicio < datetime.time(18, 0) or (hora_fim > datetime.time(0, 0) and hora_fim != datetime.time(0, 0) and hora_fim < datetime.time(18, 0)):
             return False, "De segunda a sexta o estúdio funciona das 18:00 às 00:00."
-    else: # Fim de semana
+    else:
         if hora_inicio < datetime.time(10, 0) or hora_fim > datetime.time(22, 0):
             return False, "Nos finais de semana o estúdio funciona das 10:00 às 22:00."
             
-    # Preço
     valor_hora = 60.0 if eh_mensalista else 70.0
     valor_total = duracao * valor_hora
     
@@ -87,13 +86,26 @@ if st.sidebar.button("Sair"):
     st.session_state["authenticated"] = False
     st.rerun()
 
-aba = st.sidebar.radio("Navegação", ["📅 Ver Agenda", "➕ Agendar Ensaio", "💬 Disparos WhatsApp"])
+aba = st.sidebar.radio("Navegação", ["📅 Ver Agenda", "📆 Calendário Mensal", "➕ Agendar Ensaio", "💬 Disparos WhatsApp"])
 
 df_agendamentos = carregar_dados_aba("Agendamentos")
 
-# --- ABA 1: VER AGENDA ---
+# Inicializar estado para navegação rápida
+if "modo_visao" not in st.session_state:
+    st.session_state["modo_visao"] = "agenda"
+
+# --- ABA 1: VER AGENDA (HOJE / DATA ESPECÍFICA) ---
 if aba == "📅 Ver Agenda":
-    st.header("📅 Agenda de Ensaios")
+    col_titulo, col_btn = st.columns([3, 1])
+    with col_titulo:
+        st.header("📅 Agenda de Ensaios")
+    with col_btn:
+        st.write("")
+        # Botão direto para ver o Calendário completo
+        if st.button("📆 Ver Calendário Completo", type="primary"):
+            st.session_state["modo_visao"] = "calendario"
+            st.info("Acesse a aba '📆 Calendário Mensal' no menu lateral para visualizar o mês completo!")
+
     data_filtro = st.date_input("Filtrar por data:", datetime.date.today())
     data_str = data_filtro.strftime("%d/%m/%Y")
     
@@ -103,13 +115,54 @@ if aba == "📅 Ver Agenda":
         if not agendamentos_dia.empty:
             st.subheader(f"Agendamentos para {data_str}:")
             for idx, row in agendamentos_dia.iterrows():
-                st.info(f"⏰ **{row['HORÁRIO INICIAL']} - {row['HORÁRIO FINAL']}** | Banda: **{row['NOME DA BANDA']}** ({row['NOME DO CLIENTE']}) | 💰 {row['VALOR TOTAL']}")
+                banda = row.get('NOME DA BANDA', row.get('RESPONSÁVEL', 'Banda'))
+                cliente = row.get('NOME DO CLIENTE', '')
+                h_inicio = row.get('HORÁRIO INICIAL', '')
+                h_fim = row.get('HORÁRIO FINAL', '')
+                valor = row.get('VALOR TOTAL', '')
+                st.info(f"⏰ **{h_inicio} - {h_fim}** | Banda: **{banda}** ({cliente}) | 💰 {valor}")
         else:
             st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
     else:
         st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
 
-# --- ABA 2: AGENDAR ENSAIO ---
+# --- ABA 2: CALENDÁRIO VISUAL COMPLETO ---
+elif aba == "📆 Calendário Mensal":
+    st.header("📆 Visão Geral do Calendário")
+    st.write("Acompanhe os dias ocupados e os horários reservados de cada banda:")
+    
+    events = []
+    if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
+        for idx, row in df_agendamentos.iterrows():
+            try:
+                data_dt = datetime.datetime.strptime(str(row['DATA']), "%d/%m/%Y").strftime("%Y-%m-%d")
+                h_ini = str(row['HORÁRIO INICIAL']).strip()
+                h_fim = str(row['HORÁRIO FINAL']).strip()
+                banda = row.get('NOME DA BANDA', 'Ensaio')
+                
+                events.append({
+                    "title": f"🎸 {banda} ({h_ini}-{h_fim})",
+                    "start": f"{data_dt}T{h_ini}:00",
+                    "end": f"{data_dt}T{h_fim}:00" if h_fim != "00:00" else f"{data_dt}T23:59:59",
+                    "color": "#1f77b4"
+                })
+            except Exception as e:
+                continue
+
+    calendar_options = {
+        "headerToolbar": {
+            "left": "prev,next today",
+            "center": "title",
+            "right": "dayGridMonth,timeGridWeek"
+        },
+        "initialView": "dayGridMonth",
+        "selectable": True,
+        "editable": False,
+    }
+    
+    calendar(events=events, options=calendar_options, key="calendar_estudio")
+
+# --- ABA 3: AGENDAR ENSAIO ---
 elif aba == "➕ Agendar Ensaio":
     st.header("➕ Novo Agendamento")
     
@@ -141,7 +194,6 @@ elif aba == "➕ Agendar Ensaio":
                     valor_total = resultado
                     st.success(f"Ensaio validado! Valor Total: R$ {valor_total:.2f}")
                     
-                    # Link para o usuário adicionar na planilha
                     st.warning("⚠️ Adicione a linha abaixo na sua Planilha do Google Sheets para salvar:")
                     dias_semana_pt = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
                     dia_str = dias_semana_pt[data.weekday()]
@@ -152,7 +204,7 @@ elif aba == "➕ Agendar Ensaio":
                     
                     st.markdown(f"[📲 Enviar Confirmação via WhatsApp]({link_wa})", unsafe_allow_html=True)
 
-# --- ABA 3: DISPAROS WHATSAPP ---
+# --- ABA 4: DISPAROS WHATSAPP ---
 elif aba == "💬 Disparos WhatsApp":
     st.header("💬 Lembrete do Dia")
     hoje_str = datetime.date.today().strftime("%d/%m/%Y")
@@ -162,11 +214,17 @@ elif aba == "💬 Disparos WhatsApp":
         
         if not agendamentos_hoje.empty:
             for idx, row in agendamentos_hoje.iterrows():
-                msg_lembrete = f"Olá {row['NOME DO CLIENTE']}, lembrete: Hoje é dia de ensaio com a banda {row['NOME DA BANDA']} das {row['HORÁRIO INICIAL']} às {row['HORÁRIO FINAL']}. Esperamos vocês!"
-                link = gerar_link_whatsapp(row["TELEFONE"], msg_lembrete)
+                banda = row.get('NOME DA BANDA', row.get('RESPONSÁVEL', 'Banda'))
+                cliente = row.get('NOME DO CLIENTE', 'Cliente')
+                h_ini = row.get('HORÁRIO INICIAL', '')
+                h_fim = row.get('HORÁRIO FINAL', '')
+                tel = row.get('TELEFONE', '')
                 
-                st.write(f"🎸 **Banda {row['NOME DA BANDA']}** ({row['HORÁRIO INICIAL']} - {row['HORÁRIO FINAL']})")
-                st.markdown(f"[📲 Enviar WhatsApp para {row['NOME DO CLIENTE']}]({link})")
+                msg_lembrete = f"Olá {cliente}, lembrete: Hoje é dia de ensaio com a banda {banda} das {h_ini} às {h_fim}. Esperamos vocês!"
+                link = gerar_link_whatsapp(tel, msg_lembrete)
+                
+                st.write(f"🎸 **Banda {banda}** ({h_ini} - {h_fim})")
+                st.markdown(f"[📲 Enviar WhatsApp para {cliente}]({link})")
                 st.divider()
         else:
             st.info("Não há ensaios marcados para o dia de hoje.")
