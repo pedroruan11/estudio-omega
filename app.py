@@ -131,11 +131,10 @@ def carregar_dados_aba(nome_aba):
 def login():
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("<div style='margin-top: 5vh;'></div>", unsafe_call_html=False) # Espaçamento limpo
+        st.markdown("<div style='margin-top: 5vh;'></div>", unsafe_allow_html=True)
         
         with st.container():
             if os.path.exists("logo.png"):
-                # Exibindo a logo centralizada nativamente pelo Streamlit
                 col_img1, col_img2, col_img3 = st.columns([1, 1.5, 1])
                 with col_img2:
                     st.image("logo.png", width=140)
@@ -299,7 +298,7 @@ elif aba == "📆 Calendário":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v12")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v13")
 
 # --- ABA 3: CADASTRAR CLIENTE ---
 elif aba == "🎸 Clientes":
