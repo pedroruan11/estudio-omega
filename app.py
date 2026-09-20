@@ -7,9 +7,12 @@ from streamlit_calendar import calendar
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎵", layout="wide")
 
-# CSS para ajustar tamanho da fonte e layout do calendário
+# CSS para remover a bolinha azul (.fc-daygrid-event-dot), ajustar fonte e otimizar o espaço
 st.markdown("""
 <style>
+    .fc-daygrid-event-dot {
+        display: none !important;
+    }
     .fc-event-title {
         font-size: 11px !important;
         font-weight: 500 !important;
@@ -18,9 +21,6 @@ st.markdown("""
     .fc-event {
         padding: 1px 3px !important;
         margin-bottom: 2px !important;
-    }
-    .fc-daygrid-event-dot {
-        margin-right: 3px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -137,7 +137,7 @@ if aba == "📅 Ver Agenda":
     else:
         st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
 
-# --- ABA 2: CALENDÁRIO VISUAL COMPLETO (FORMATADO) ---
+# --- ABA 2: CALENDÁRIO VISUAL COMPLETO (SÓ HORÁRIO E NOME DA BANDA) ---
 elif aba == "📆 Calendário Mensal":
     st.header("📆 Visão Geral do Calendário")
     st.write("Acompanhe os dias ocupados e os horários reservados de cada banda:")
@@ -151,8 +151,9 @@ elif aba == "📆 Calendário Mensal":
                 h_fim = str(row['HORÁRIO FINAL']).strip()
                 banda = row.get('NOME DA BANDA', 'Ensaio')
                 
+                # Apenas Horario - Banda (Sem emoji de guitarra e sem bolinha)
                 events.append({
-                    "title": f"🎸 {h_ini} - {h_fim} - {banda}",
+                    "title": f"{h_ini} - {h_fim} - {banda}",
                     "start": f"{data_dt}T{h_ini}:00",
                     "end": f"{data_dt}T{h_fim}:00" if h_fim != "00:00" else f"{data_dt}T23:59:59",
                     "color": "#1f77b4"
@@ -172,13 +173,13 @@ elif aba == "📆 Calendário Mensal":
             "month": "Mês",
             "week": "Semana"
         },
-        "displayEventTime": False,  # Oculta o horário automático duplicado
+        "displayEventTime": False,
         "initialView": "dayGridMonth",
         "selectable": True,
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v3")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v4")
 
 # --- ABA 3: AGENDAR ENSAIO ---
 elif aba == "➕ Agendar Ensaio":
