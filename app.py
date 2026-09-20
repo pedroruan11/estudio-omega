@@ -329,7 +329,7 @@ elif aba == "⚙️ Administração":
             st.metric("Total de Ensaios no Mês Selecionado", len(df_mes))
             
             st.divider()
-            st.subheader("🏆 Ranking de Bandas que Mais Ensaiarem")
+            st.subheader("🏆 Ranking de Bandas")
             
             tipo_ranking = st.radio("Visualizar Ranking por:", ["Por Mês", "Por Ano"], horizontal=True)
             
