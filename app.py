@@ -23,6 +23,21 @@ st.markdown("""
         border-right: 1px solid #222222;
     }
     
+    /* Esconde as bolinhas (radio buttons) nativas do menu lateral para um visual mais limpo */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label div:first-child {
+        display: none !important;
+    }
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
+        background-color: transparent;
+        padding: 6px 10px;
+        border-radius: 6px;
+        transition: background 0.2s;
+    }
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
+        background-color: #1f1f1f;
+        cursor: pointer;
+    }
+    
     /* Títulos e Cabeçalhos */
     h1, h2, h3, h4, h5, h6 {
         color: #f39c12 !important;
@@ -114,43 +129,56 @@ def carregar_dados_aba(nome_aba):
 
 # --- LOGIN DOS SÓCIOS ---
 def login():
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        if os.path.exists("logo.png"):
-            st.image("logo.png", use_container_width=True)
-        else:
-            st.markdown("<h2 style='text-align: center;'>⚡ ESTÚDIO ÓMEGA</h2>", unsafe_allow_html=True)
-            
-        st.markdown("<p style='text-align: center; color: #888;'>Painel de Gestão Restrito</p>", unsafe_allow_html=True)
+        # Espaçamento vertical controlado apenas no contexto do login para centralizar sem criar faixas brancas globais
+        st.markdown("<div style='margin-top: 10vh;'></div>", unsafe_allow_html=True)
         
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password")
-        
-        if st.button("Entrar no Sistema", use_container_width=True):
-            df_users = carregar_dados_aba("Administradores")
-            if not df_users.empty and "USUÁRIO" in df_users.columns:
-                user_clean = username.strip().lower()
-                pass_clean = password.strip()
-                
-                df_users["USUÁRIO_CLEAN"] = df_users["USUÁRIO"].astype(str).str.strip().str.lower()
-                df_users["SENHA_CLEAN"] = df_users["SENHA"].astype(str).str.strip()
-                
-                user_row = df_users[(df_users["USUÁRIO_CLEAN"] == user_clean) & (df_users["SENHA_CLEAN"] == pass_clean)]
-                if not user_row.empty:
-                    st.session_state["authenticated"] = True
-                    st.session_state["user"] = user_row.iloc[0]["NOME"]
-                    st.session_state["username_raw"] = user_row.iloc[0]["USUÁRIO"]
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha incorretos.")
+        with st.container():
+            if os.path.exists("logo.png"):
+                st.markdown(
+                    """
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <img src="app/static/logo.png" style="max-width: 160px; height: auto; border-radius: 8px;" />
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
             else:
-                if (username.strip() == "pedro" and password.strip() == "36950612") or (username.strip() == "fabio" and password.strip() == "admin123"):
-                    st.session_state["authenticated"] = True
-                    st.session_state["user"] = username
-                    st.session_state["username_raw"] = username
-                    st.rerun()
+                st.markdown("<h2 style='text-align: center; color: #f39c12; margin-bottom: 0px;'>⚡ ESTÚDIO ÓMEGA</h2>", unsafe_allow_html=True)
+                
+            st.markdown("<p style='text-align: center; color: #888; font-size: 0.9rem; margin-bottom: 25px;'>Painel de Gestão Restrito</p>", unsafe_allow_html=True)
+            
+            username = st.text_input("Usuário", placeholder="Digite seu usuário")
+            password = st.text_input("Senha", type="password", placeholder="••••••••")
+            
+            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+            
+            if st.button("Entrar no Sistema", use_container_width=True):
+                df_users = carregar_dados_aba("Administradores")
+                if not df_users.empty and "USUÁRIO" in df_users.columns:
+                    user_clean = username.strip().lower()
+                    pass_clean = password.strip()
+                    
+                    df_users["USUÁRIO_CLEAN"] = df_users["USUÁRIO"].astype(str).str.strip().str.lower()
+                    df_users["SENHA_CLEAN"] = df_users["SENHA"].astype(str).str.strip()
+                    
+                    user_row = df_users[(df_users["USUÁRIO_CLEAN"] == user_clean) & (df_users["SENHA_CLEAN"] == pass_clean)]
+                    if not user_row.empty:
+                        st.session_state["authenticated"] = True
+                        st.session_state["user"] = user_row.iloc[0]["NOME"]
+                        st.session_state["username_raw"] = user_row.iloc[0]["USUÁRIO"]
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou senha incorretos.")
                 else:
-                    st.error("Erro ao validar dados na planilha.")
+                    if (username.strip() == "pedro" and password.strip() == "36950612") or (username.strip() == "fabio" and password.strip() == "admin123"):
+                        st.session_state["authenticated"] = True
+                        st.session_state["user"] = username
+                        st.session_state["username_raw"] = username
+                        st.rerun()
+                    else:
+                        st.error("Erro ao validar dados na planilha.")
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -199,7 +227,7 @@ if st.sidebar.button("Sair da Sessão", use_container_width=True):
 
 st.sidebar.markdown("---")
 aba_opcoes = ["📅 Agenda", "📆 Calendário", "🎸 Clientes", "➕ Novo Ensaio", "💬 WhatsApp", "⚙️ Admin"]
-aba = st.sidebar.radio("Menu", aba_opcoes)
+aba = st.sidebar.radio("Menu", aba_opcoes, label_visibility="collapsed")
 
 df_agendamentos = carregar_dados_aba("Agendamentos")
 df_blacklist = carregar_dados_aba("Blacklist")
