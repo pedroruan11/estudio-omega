@@ -89,12 +89,15 @@ st.markdown("""
         box-shadow: 0 0 6px rgba(243, 156, 18, 0.5) !important;
     }
     
-    /* Correção total do Dropdown/Popover (Selectbox e DateInput nativos do Streamlit) para tema escuro */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], div[data-baseweb="calendar"] {
-        background-color: #141414 !important;
+    /* --- CORREÇÃO COMPLETA DO POPUP, MENU E MINI CALENDÁRIO (BASEWEB) --- */
+    div[data-baseweb="popover"], 
+    div[data-baseweb="menu"], 
+    div[data-baseweb="calendar"],
+    div[data-baseweb="select"] {
+        background-color: #121212 !important;
         color: #ffffff !important;
         border: 1px solid #333333 !important;
-        border-radius: 6px !important;
+        border-radius: 8px !important;
     }
     
     /* Itens de listas suspensas (Selectbox dropdown options) */
@@ -107,17 +110,35 @@ st.markdown("""
         color: #f39c12 !important;
     }
 
-    /* Estilização do Mini Calendário (Date Picker Popup) */
-    div[data-baseweb="calendar"] header, div[data-baseweb="calendar"] div {
-        background-color: #141414 !important;
+    /* Cabeçalho do Mini Calendário (Mês e Ano / Botões de navegação) */
+    div[data-baseweb="calendar"] header, 
+    div[data-baseweb="calendar"] div,
+    div[data-baseweb="calendar"] [role="heading"] {
+        background-color: #121212 !important;
         color: #ffffff !important;
     }
-    div[data-baseweb="calendar"] button {
+
+    /* Dias da semana e números dos dias no mini calendário */
+    div[data-baseweb="calendar"] button,
+    div[data-baseweb="calendar"] span,
+    div[data-baseweb="calendar"] div {
         color: #ffffff !important;
     }
+
+    /* Hover nos dias do calendário */
     div[data-baseweb="calendar"] button:hover {
         background-color: #222222 !important;
         color: #f39c12 !important;
+        border-radius: 50% !important;
+    }
+
+    /* Dia selecionado ou dia de hoje no mini calendário */
+    div[data-baseweb="calendar"] button[aria-selected="true"],
+    div[data-baseweb="calendar"] button[aria-current="date"] {
+        background-color: #f39c12 !important;
+        color: #000000 !important;
+        font-weight: bold !important;
+        border-radius: 50% !important;
     }
 
     /* Textos placeholder dos inputs */
@@ -151,14 +172,16 @@ st.markdown("""
         border-radius: 6px;
     }
 
-    /* --- TEMA ESCURO FORÇADO NO FULLCALENDAR (CALENDÁRIO VISUAL) --- */
-    iframe {
-        color-scheme: dark;
-    }
-    .fc, .fc *, .fc-theme-standard, .fc-scrollgrid, .fc-daygrid-day, .fc-timegrid, .fc-col-header-cell {
-        background-color: #0c0c0c !important;
+    /* --- TEMA ESCURO ROBUSTO PARA O CALENDÁRIO VISUAL (FullCalendar) --- */
+    .fc {
+        background-color: #0d0d0d !important;
         color: #ffffff !important;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid {
         border-color: #262626 !important;
+        background-color: #0d0d0d !important;
     }
     .fc-daygrid-day {
         background-color: #121212 !important;
@@ -173,7 +196,6 @@ st.markdown("""
         color: #ffffff !important;
         font-weight: 600;
     }
-    /* Dias de outros meses que aparecem no grid */
     .fc-day-other .fc-daygrid-day-number {
         color: #555555 !important;
     }
@@ -406,10 +428,9 @@ elif aba == "📆 Calendário":
         "initialView": "dayGridMonth",
         "selectable": True,
         "editable": False,
-        "themeSystem": "standard",
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v19")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v16")
 
 # --- ABA 3: CADASTRAR CLIENTE ---
 elif aba == "🎸 Clientes":
