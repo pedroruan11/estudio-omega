@@ -131,19 +131,14 @@ def carregar_dados_aba(nome_aba):
 def login():
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        # Espaçamento vertical controlado apenas no contexto do login para centralizar sem criar faixas brancas globais
-        st.markdown("<div style='margin-top: 10vh;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 5vh;'></div>", unsafe_call_html=False) # Espaçamento limpo
         
         with st.container():
             if os.path.exists("logo.png"):
-                st.markdown(
-                    """
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <img src="app/static/logo.png" style="max-width: 160px; height: auto; border-radius: 8px;" />
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
+                # Exibindo a logo centralizada nativamente pelo Streamlit
+                col_img1, col_img2, col_img3 = st.columns([1, 1.5, 1])
+                with col_img2:
+                    st.image("logo.png", width=140)
             else:
                 st.markdown("<h2 style='text-align: center; color: #f39c12; margin-bottom: 0px;'>⚡ ESTÚDIO ÓMEGA</h2>", unsafe_allow_html=True)
                 
@@ -304,7 +299,7 @@ elif aba == "📆 Calendário":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v11")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v12")
 
 # --- ABA 3: CADASTRAR CLIENTE ---
 elif aba == "🎸 Clientes":
