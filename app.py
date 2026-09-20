@@ -29,11 +29,11 @@ st.markdown("""
 SHEET_ID = "1Cpz09lM3tPnx1kG2pk4UAKR3bgIQ8WPmMJnRP6EpLEY"
 
 # --- CARREGAR DADOS DA PLANILHA ---
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=5)
 def carregar_dados_aba(nome_aba):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nome_aba}"
     try:
-        df = pd.read_csv(url)
+        df = pd.read_csv(url, dtype=str) # Lê tudo como Texto para evitar erros em senhas numéricas
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
@@ -48,7 +48,14 @@ def login():
     if st.button("Entrar"):
         df_users = carregar_dados_aba("Administradores")
         if not df_users.empty and "USUÁRIO" in df_users.columns:
-            user_row = df_users[(df_users["USUÁRIO"].astype(str) == username) & (df_users["SENHA"].astype(str) == password)]
+            # Tratamento de texto para garantir comparação idêntica
+            user_clean = username.strip().lower()
+            pass_clean = password.strip()
+            
+            df_users["USUÁRIO_CLEAN"] = df_users["USUÁRIO"].astype(str).str.strip().str.lower()
+            df_users["SENHA_CLEAN"] = df_users["SENHA"].astype(str).str.strip()
+            
+            user_row = df_users[(df_users["USUÁRIO_CLEAN"] == user_clean) & (df_users["SENHA_CLEAN"] == pass_clean)]
             if not user_row.empty:
                 st.session_state["authenticated"] = True
                 st.session_state["user"] = user_row.iloc[0]["NOME"]
@@ -56,7 +63,7 @@ def login():
             else:
                 st.error("Usuário ou senha incorretos.")
         else:
-            if (username == "socio1" and password == "senha123") or (username == "socio2" and password == "senha456"):
+            if (username.strip() == "pedro" and password.strip() == "36950612") or (username.strip() == "fabio" and password.strip() == "admin123"):
                 st.session_state["authenticated"] = True
                 st.session_state["user"] = username
                 st.rerun()
@@ -137,7 +144,7 @@ if aba == "📅 Ver Agenda":
     else:
         st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
 
-# --- ABA 2: CALENDÁRIO VISUAL COMPLETO (SÓ HORÁRIO E NOME DA BANDA) ---
+# --- ABA 2: CALENDÁRIO VISUAL COMPLETO ---
 elif aba == "📆 Calendário Mensal":
     st.header("📆 Visão Geral do Calendário")
     st.write("Acompanhe os dias ocupados e os horários reservados de cada banda:")
@@ -151,7 +158,6 @@ elif aba == "📆 Calendário Mensal":
                 h_fim = str(row['HORÁRIO FINAL']).strip()
                 banda = row.get('NOME DA BANDA', 'Ensaio')
                 
-                # Apenas Horario - Banda (Sem emoji de guitarra e sem bolinha)
                 events.append({
                     "title": f"{h_ini} - {h_fim} - {banda}",
                     "start": f"{data_dt}T{h_ini}:00",
@@ -179,7 +185,7 @@ elif aba == "📆 Calendário Mensal":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v4")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v5")
 
 # --- ABA 3: AGENDAR ENSAIO ---
 elif aba == "➕ Agendar Ensaio":
