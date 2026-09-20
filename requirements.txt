@@ -2,3 +2,4 @@ streamlit
 pandas
 gspread
 streamlit-calendar
+google-auth
