@@ -16,7 +16,6 @@ def carregar_dados_aba(nome_aba):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nome_aba}"
     try:
         df = pd.read_csv(url)
-        # Limpar espaços nos nomes das colunas
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
@@ -90,20 +89,14 @@ aba = st.sidebar.radio("Navegação", ["📅 Ver Agenda", "📆 Calendário Mens
 
 df_agendamentos = carregar_dados_aba("Agendamentos")
 
-# Inicializar estado para navegação rápida
-if "modo_visao" not in st.session_state:
-    st.session_state["modo_visao"] = "agenda"
-
-# --- ABA 1: VER AGENDA (HOJE / DATA ESPECÍFICA) ---
+# --- ABA 1: VER AGENDA ---
 if aba == "📅 Ver Agenda":
     col_titulo, col_btn = st.columns([3, 1])
     with col_titulo:
         st.header("📅 Agenda de Ensaios")
     with col_btn:
         st.write("")
-        # Botão direto para ver o Calendário completo
         if st.button("📆 Ver Calendário Completo", type="primary"):
-            st.session_state["modo_visao"] = "calendario"
             st.info("Acesse a aba '📆 Calendário Mensal' no menu lateral para visualizar o mês completo!")
 
     data_filtro = st.date_input("Filtrar por data:", datetime.date.today())
@@ -126,7 +119,7 @@ if aba == "📅 Ver Agenda":
     else:
         st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
 
-# --- ABA 2: CALENDÁRIO VISUAL COMPLETO ---
+# --- ABA 2: CALENDÁRIO VISUAL COMPLETO (EM PORTUGUÊS / 24H) ---
 elif aba == "📆 Calendário Mensal":
     st.header("📆 Visão Geral do Calendário")
     st.write("Acompanhe os dias ocupados e os horários reservados de cada banda:")
@@ -141,7 +134,7 @@ elif aba == "📆 Calendário Mensal":
                 banda = row.get('NOME DA BANDA', 'Ensaio')
                 
                 events.append({
-                    "title": f"🎸 {banda} ({h_ini}-{h_fim})",
+                    "title": f"🎸 {banda} ({h_ini} às {h_fim})",
                     "start": f"{data_dt}T{h_ini}:00",
                     "end": f"{data_dt}T{h_fim}:00" if h_fim != "00:00" else f"{data_dt}T23:59:59",
                     "color": "#1f77b4"
@@ -150,17 +143,29 @@ elif aba == "📆 Calendário Mensal":
                 continue
 
     calendar_options = {
+        "locale": "pt-br",
         "headerToolbar": {
             "left": "prev,next today",
             "center": "title",
             "right": "dayGridMonth,timeGridWeek"
+        },
+        "buttonText": {
+            "today": "Hoje",
+            "month": "Mês",
+            "week": "Semana"
+        },
+        "eventTimeFormat": {
+            "hour": "2-digit",
+            "minute": "2-digit",
+            "meridiem": False,
+            "hour12": False
         },
         "initialView": "dayGridMonth",
         "selectable": True,
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_pt")
 
 # --- ABA 3: AGENDAR ENSAIO ---
 elif aba == "➕ Agendar Ensaio":
