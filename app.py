@@ -151,16 +151,14 @@ st.markdown("""
         border-radius: 6px;
     }
 
-    /* --- TEMA ESCURO ROBUSTO PARA O CALENDÁRIO VISUAL (FullCalendar) --- */
-    .fc {
-        background-color: #0d0d0d !important;
-        color: #ffffff !important;
-        border-radius: 8px;
-        padding: 10px;
+    /* --- TEMA ESCURO FORÇADO NO FULLCALENDAR (CALENDÁRIO VISUAL) --- */
+    iframe {
+        color-scheme: dark;
     }
-    .fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid {
+    .fc, .fc *, .fc-theme-standard, .fc-scrollgrid, .fc-daygrid-day, .fc-timegrid, .fc-col-header-cell {
+        background-color: #0c0c0c !important;
+        color: #ffffff !important;
         border-color: #262626 !important;
-        background-color: #0d0d0d !important;
     }
     .fc-daygrid-day {
         background-color: #121212 !important;
@@ -408,9 +406,10 @@ elif aba == "📆 Calendário":
         "initialView": "dayGridMonth",
         "selectable": True,
         "editable": False,
+        "themeSystem": "standard",
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v16")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v19")
 
 # --- ABA 3: CADASTRAR CLIENTE ---
 elif aba == "🎸 Clientes":
