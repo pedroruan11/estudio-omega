@@ -6,11 +6,74 @@ import os
 from streamlit_calendar import calendar
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎵", layout="wide")
+st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎸", layout="wide")
 
-# CSS Personalizado para o Calendário e Elementos da Interface
+# --- DESIGN SYSTEM: TEMA ESCURO COM LARANJA/DOURADO ---
 st.markdown("""
 <style>
+    /* Cores Globais e Fundo Geral */
+    .stApp {
+        background-color: #0d0d0d;
+        color: #e0e0e0;
+    }
+    
+    /* Barra Lateral (Sidebar) */
+    [data-testid="stSidebar"] {
+        background-color: #141414;
+        border-right: 1px solid #222222;
+    }
+    
+    /* Títulos e Cabeçalhos */
+    h1, h2, h3, h4, h5, h6 {
+        color: #f39c12 !important;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    
+    /* Botões Principais */
+    .stButton>button {
+        background-color: #f39c12;
+        color: #0d0d0d;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        background-color: #e67e22;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+    }
+    
+    /* Inputs, Selectbox e Campos de Texto */
+    .stTextInput>div>div>input, .stSelectbox>div>div>select, .stDateInput>div>div>input, .stTimeInput>div>div>input {
+        background-color: #1a1a1a;
+        color: #ffffff;
+        border: 1px solid #333333;
+        border-radius: 6px;
+    }
+    .stTextInput>div>div>input:focus, .stSelectbox>div>div>select:focus {
+        border-color: #f39c12;
+        box-shadow: 0 0 5px rgba(243, 156, 18, 0.4);
+    }
+    
+    /* Cards de Informação e Alertas */
+    .stAlert {
+        background-color: #1a1a1a;
+        border: 1px solid #333333;
+        color: #f0f0f0;
+        border-radius: 6px;
+    }
+    
+    /* Métricas */
+    [data-testid="stMetricValue"] {
+        color: #f39c12 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #aaaaaa !important;
+    }
+    
+    /* Ajustes minimalistas para o calendário */
     .fc-daygrid-event-dot {
         display: none !important;
     }
@@ -20,8 +83,17 @@ st.markdown("""
         white-space: normal !important;
     }
     .fc-event {
-        padding: 1px 3px !important;
+        padding: 2px 4px !important;
         margin-bottom: 2px !important;
+        background-color: #1f1f1f !important;
+        border-left: 3px solid #f39c12 !important;
+        border-right: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
+    }
+    .fc-toolbar-title {
+        color: #f39c12 !important;
+        font-size: 1.2rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -42,39 +114,43 @@ def carregar_dados_aba(nome_aba):
 
 # --- LOGIN DOS SÓCIOS ---
 def login():
-    if os.path.exists("logo.png"):
-        st.image("logo.png", width=200)
-    else:
-        st.title("🔑 Login - Estúdio Ómega")
-        
-    username = st.text_input("Usuário")
-    password = st.text_input("Senha", type="password")
-    
-    if st.button("Entrar"):
-        df_users = carregar_dados_aba("Administradores")
-        if not df_users.empty and "USUÁRIO" in df_users.columns:
-            user_clean = username.strip().lower()
-            pass_clean = password.strip()
-            
-            df_users["USUÁRIO_CLEAN"] = df_users["USUÁRIO"].astype(str).str.strip().str.lower()
-            df_users["SENHA_CLEAN"] = df_users["SENHA"].astype(str).str.strip()
-            
-            user_row = df_users[(df_users["USUÁRIO_CLEAN"] == user_clean) & (df_users["SENHA_CLEAN"] == pass_clean)]
-            if not user_row.empty:
-                st.session_state["authenticated"] = True
-                st.session_state["user"] = user_row.iloc[0]["NOME"]
-                st.session_state["username_raw"] = user_row.iloc[0]["USUÁRIO"]
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if os.path.exists("logo.png"):
+            st.image("logo.png", use_container_width=True)
         else:
-            if (username.strip() == "pedro" and password.strip() == "36950612") or (username.strip() == "fabio" and password.strip() == "admin123"):
-                st.session_state["authenticated"] = True
-                st.session_state["user"] = username
-                st.session_state["username_raw"] = username
-                st.rerun()
+            st.markdown("<h2 style='text-align: center;'>⚡ ESTÚDIO ÓMEGA</h2>", unsafe_allow_html=True)
+            
+        st.markdown("<p style='text-align: center; color: #888;'>Painel de Gestão Restrito</p>", unsafe_allow_html=True)
+        
+        username = st.text_input("Usuário")
+        password = st.text_input("Senha", type="password")
+        
+        if st.button("Entrar no Sistema", use_container_width=True):
+            df_users = carregar_dados_aba("Administradores")
+            if not df_users.empty and "USUÁRIO" in df_users.columns:
+                user_clean = username.strip().lower()
+                pass_clean = password.strip()
+                
+                df_users["USUÁRIO_CLEAN"] = df_users["USUÁRIO"].astype(str).str.strip().str.lower()
+                df_users["SENHA_CLEAN"] = df_users["SENHA"].astype(str).str.strip()
+                
+                user_row = df_users[(df_users["USUÁRIO_CLEAN"] == user_clean) & (df_users["SENHA_CLEAN"] == pass_clean)]
+                if not user_row.empty:
+                    st.session_state["authenticated"] = True
+                    st.session_state["user"] = user_row.iloc[0]["NOME"]
+                    st.session_state["username_raw"] = user_row.iloc[0]["USUÁRIO"]
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha incorretos.")
             else:
-                st.error("Erro ao validar dados na planilha.")
+                if (username.strip() == "pedro" and password.strip() == "36950612") or (username.strip() == "fabio" and password.strip() == "admin123"):
+                    st.session_state["authenticated"] = True
+                    st.session_state["user"] = username
+                    st.session_state["username_raw"] = username
+                    st.rerun()
+                else:
+                    st.error("Erro ao validar dados na planilha.")
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -113,28 +189,31 @@ def gerar_link_whatsapp(telefone, mensagem):
 # --- INTERFACE PRINCIPAL ---
 if os.path.exists("logo.png"):
     st.sidebar.image("logo.png", use_container_width=True)
+else:
+    st.sidebar.markdown("### ⚡ ÓMEGA")
 
-st.sidebar.title(f"Bem-vindo, {st.session_state['user']}")
-if st.sidebar.button("Sair"):
+st.sidebar.markdown(f"**Sócio:** {st.session_state['user']}")
+if st.sidebar.button("Sair da Sessão", use_container_width=True):
     st.session_state["authenticated"] = False
     st.rerun()
 
-aba_opcoes = ["📅 Ver Agenda", "📆 Calendário Mensal", "🎸 Cadastrar Cliente", "➕ Agendar Ensaio", "💬 Disparos WhatsApp", "⚙️ Administração"]
-aba = st.sidebar.radio("Navegação", aba_opcoes)
+st.sidebar.markdown("---")
+aba_opcoes = ["📅 Agenda", "📆 Calendário", "🎸 Clientes", "➕ Novo Ensaio", "💬 WhatsApp", "⚙️ Admin"]
+aba = st.sidebar.radio("Menu", aba_opcoes)
 
 df_agendamentos = carregar_dados_aba("Agendamentos")
 df_blacklist = carregar_dados_aba("Blacklist")
-df_clientes = carregar_dados_aba("Clientes")  # Lê especificamente a aba de Clientes
+df_clientes = carregar_dados_aba("Clientes")
 
 # --- ABA 1: VER AGENDA ---
-if aba == "📅 Ver Agenda":
+if aba == "📅 Agenda":
     col_titulo, col_btn = st.columns([3, 1])
     with col_titulo:
         st.header("📅 Agenda de Ensaios")
     with col_btn:
         st.write("")
-        if st.button("📆 Ver Calendário Completo", type="primary"):
-            st.info("Acesse a aba '📆 Calendário Mensal' no menu lateral para visualizar o mês completo!")
+        if st.button("Ver Calendário", use_container_width=True):
+            st.info("Abra a aba 'Calendário' no menu lateral.")
 
     data_filtro = st.date_input("Filtrar por data:", datetime.date.today())
     data_str = data_filtro.strftime("%d/%m/%Y")
@@ -157,9 +236,9 @@ if aba == "📅 Ver Agenda":
         st.success("Nenhum ensaio agendado para este dia. Sala disponível!")
 
 # --- ABA 2: CALENDÁRIO VISUAL COMPLETO ---
-elif aba == "📆 Calendário Mensal":
-    st.header("📆 Visão Geral do Calendário")
-    st.write("Acompanhe os dias ocupados e os horários reservados de cada banda:")
+elif aba == "📆 Calendário":
+    st.header("📆 Visão Geral do Mês")
+    st.write("Acompanhe os horários reservados de cada banda de forma limpa e direta:")
     
     events = []
     if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
@@ -171,10 +250,10 @@ elif aba == "📆 Calendário Mensal":
                 banda = row.get('NOME DA BANDA', 'Ensaio')
                 
                 events.append({
-                    "title": f"{h_ini} - {h_fim} - {banda}",
+                    "title": f"{h_ini} - {h_fim} : {banda}",
                     "start": f"{data_dt}T{h_ini}:00",
                     "end": f"{data_dt}T{h_fim}:00" if h_fim != "00:00" else f"{data_dt}T23:59:59",
-                    "color": "#1f77b4"
+                    "color": "#f39c12"
                 })
             except Exception as e:
                 continue
@@ -197,31 +276,32 @@ elif aba == "📆 Calendário Mensal":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v10")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v11")
 
 # --- ABA 3: CADASTRAR CLIENTE ---
-elif aba == "🎸 Cadastrar Cliente":
-    st.header("🎸 Cadastrar Novo Cliente / Banda")
-    st.write("Cadastre as informações para facilitar o preenchimento automático nos agendamentos.")
+elif aba == "🎸 Clientes":
+    st.header("🎸 Cadastro de Clientes e Bandas")
+    st.write("Adicione novos registros para preenchimento rápido nos agendamentos.")
     
     with st.form("form_cadastrar_cliente"):
         novo_nome_banda = st.text_input("Nome da Banda *")
         novo_nome_cliente = st.text_input("Nome do Cliente / Responsável *")
         novo_whatsapp = st.text_input("Telefone (WhatsApp) *", placeholder="11976297814")
+        tipo_cliente = st.selectbox("Tipo de Cliente", ["Avulso", "Mensalista"])
         
-        sub_cadastro = st.form_submit_button("Gerar Registro de Cliente")
+        sub_cadastro = st.form_submit_button("Gerar Registro para Planilha", use_container_width=True)
         
         if sub_cadastro:
             if not novo_nome_banda or not novo_nome_cliente or not novo_whatsapp:
                 st.error("Por favor, preencha todos os campos obrigatórios.")
             else:
-                st.success(f"Registro do cliente **{novo_nome_cliente}** ({novo_nome_banda}) gerado com sucesso!")
-                st.warning("⚠️ Cole a linha abaixo na aba **'Clientes'** da sua Planilha do Google Drive:")
-                st.code(f"{novo_nome_banda}\t{novo_nome_cliente}\t{novo_whatsapp}")
+                st.success(f"Registro gerado com sucesso!")
+                st.warning("⚠️ Copie a linha abaixo e cole na aba **'Clientes'** da sua Planilha do Google Sheets:")
+                st.code(f"{novo_nome_banda}\t{novo_nome_cliente}\t{novo_whatsapp}\t{tipo_cliente}")
 
 # --- ABA 4: AGENDAR ENSAIO ---
-elif aba == "➕ Agendar Ensaio":
-    st.header("➕ Novo Agendamento")
+elif aba == "➕ Novo Ensaio":
+    st.header("➕ Agendar Novo Ensaio")
     
     opcoes_banda = ["-- Selecionar da base de clientes --"]
     mapa_cadastros = {}
@@ -247,11 +327,11 @@ elif aba == "➕ Agendar Ensaio":
 
     col_sel, col_btn_novo = st.columns([3, 1])
     with col_sel:
-        banda_selecionada = st.selectbox("Selecione um cliente da base:", opcoes_banda)
+        banda_selecionada = st.selectbox("Puxar dados do cadastro:", opcoes_banda)
     with col_btn_novo:
         st.write("")
-        if st.button("➕ Novo Cliente", type="secondary"):
-            st.info("Acesse a aba '🎸 Cadastrar Cliente' no menu lateral para adicionar novos cadastros!")
+        if st.button("Novo Cadastro", use_container_width=True):
+            .info("Vá em 'Clientes' no menu lateral.")
 
     val_banda = ""
     val_cliente = ""
@@ -277,9 +357,9 @@ elif aba == "➕ Agendar Ensaio":
             hora_fim = st.time_input("Horário Final *", datetime.time(20, 0))
             
         eh_mensalista = st.checkbox("Cliente Mensalista (R$ 60/h)")
-        forcar_agendamento = st.checkbox("Ignorar alerta de Blacklist e prosseguir mesmo assim")
+        forcar_agendamento = st.checkbox("Ignorar alerta de Blacklist (Forçar agendamento)")
         
-        submitted = st.form_submit_button("Confirmar Agendamento")
+        submitted = st.form_submit_button("Validar e Confirmar Agendamento", use_container_width=True)
         
         if submitted:
             if not nome_cliente or not telefone_cliente or not nome_banda:
@@ -300,7 +380,7 @@ elif aba == "➕ Agendar Ensaio":
                 
                 if bloqueado and not forcar_agendamento:
                     st.error(f"⛔ **ATENÇÃO:** O cliente/banda **{nome_banda}** consta na **Blacklist** (Motivo: {motivo_bloqueio}).")
-                    st.warning("Se desejar agendar mesmo assim, marque a caixa **'Ignorar alerta de Blacklist e prosseguir mesmo assim'** acima e confirme novamente.")
+                    st.warning("Se desejar prosseguir, marque a caixa de forçar agendamento acima.")
                 else:
                     valido, resultado = validar_agendamento(data, hora_inicio, hora_fim, eh_mensalista)
                     if not valido:
@@ -309,7 +389,7 @@ elif aba == "➕ Agendar Ensaio":
                         valor_total = resultado
                         st.success(f"Ensaio validado com sucesso! Valor Total: R$ {valor_total:.2f}")
                         
-                        st.warning("⚠️ Cole a linha abaixo na sua Planilha do Google Sheets (Aba 'Agendamentos'):")
+                        st.warning("⚠️ Copie e cole a linha abaixo na aba **'Agendamentos'** da sua Planilha:")
                         dias_semana_pt = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
                         dia_str = dias_semana_pt[data.weekday()]
                         st.code(f"{data.strftime('%d/%m/%Y')}\t{dia_str}\t{hora_inicio.strftime('%H:%M')}\t{hora_fim.strftime('%H:%M')}\t{nome_cliente}\t{telefone_cliente}\t{nome_banda}\t{'Mensalista' if eh_mensalista else 'Avulso'}\tR$ {valor_total:.2f}\tConfirmado")
@@ -320,8 +400,8 @@ elif aba == "➕ Agendar Ensaio":
                         st.markdown(f"[📲 Enviar Confirmação via WhatsApp]({link_wa})", unsafe_allow_html=True)
 
 # --- ABA 5: DISPAROS WHATSAPP ---
-elif aba == "💬 Disparos WhatsApp":
-    st.header("💬 Lembrete do Dia")
+elif aba == "💬 WhatsApp":
+    st.header("💬 Lembretes Diários")
     hoje_str = datetime.date.today().strftime("%d/%m/%Y")
     
     if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
@@ -347,68 +427,44 @@ elif aba == "💬 Disparos WhatsApp":
         st.info("Não há ensaios marcados para o dia de hoje.")
 
 # --- ABA 6: ADMINISTRAÇÃO ---
-elif aba == "⚙️ Administração":
-    st.header("⚙️ Painel de Administração")
+elif aba == "⚙️ Admin":
+    st.header("⚙️ Painel Administrativo")
     
-    sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs(["👥 Gerenciar Usuários", "📊 Estatísticas", "💰 Finanças", "🚫 Blacklist"])
+    sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs(["Usuários", "Estatísticas", "Finanças", "Blacklist"])
     
-    # --- 1. GERENCIAR USUÁRIOS ---
     with sub_tab1:
-        st.subheader("👥 Gerenciar Usuários & Alterar Senha")
+        st.subheader("👥 Gestão de Acessos")
         df_users = carregar_dados_aba("Administradores")
-        
         if not df_users.empty and "USUÁRIO" in df_users.columns:
             st.dataframe(df_users[["USUÁRIO", "NOME"]], use_container_width=True)
-            
-            st.divider()
-            st.write("🔒 **Instruções para Alterar Senha:**")
-            st.info("Para alterar a sua senha ou adicionar um novo sócio, abra a aba **Administradores** na sua Planilha do Google Drive e edite diretamente a coluna **SENHA**.")
-            st.markdown(f"[📂 Abrir Planilha 'Administradores' no Google Drive](https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit#gid=0)", unsafe_allow_html=True)
+            st.info("Para alterar senhas ou adicionar novos sócios, edite diretamente a aba **Administradores** na sua Planilha do Google Sheets.")
         else:
-            st.warning("Não foi possível carregar a lista de administradores.")
+            st.warning("Lista de administradores vazia.")
 
-    # --- 2. ESTATÍSTICAS ---
     with sub_tab2:
         st.subheader("📊 Estatísticas do Estúdio")
-        
         if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
             df_agendamentos["DT"] = pd.to_datetime(df_agendamentos["DATA"], format="%d/%m/%Y", errors="coerce")
             df_val = df_agendamentos.dropna(subset=["DT"]).copy()
-            
             df_val["MES_ANO"] = df_val["DT"].dt.strftime("%m/%Y")
             df_val["ANO"] = df_val["DT"].dt.strftime("%Y")
             
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                meses_disp = sorted(df_val["MES_ANO"].unique().tolist(), reverse=True)
-                mes_sel = st.selectbox("Filtrar Estatísticas por Mês:", meses_disp)
-            
-            df_mes = df_val[df_val["MES_ANO"] == mes_sel]
-            
-            st.metric("Total de Ensaios no Mês Selecionado", len(df_mes))
-            
-            st.divider()
-            st.subheader("🏆 Ranking de Bandas que Mais Ensaiarem")
-            
-            tipo_ranking = st.radio("Visualizar Ranking por:", ["Por Mês", "Por Ano"], horizontal=True)
-            
-            if tipo_ranking == "Por Mês":
+            meses_disp = sorted(df_val["MES_ANO"].unique().tolist(), reverse=True)
+            if meses_disp:
+                mes_sel = st.selectbox("Mês de referência:", meses_disp)
+                df_mes = df_val[df_val["MES_ANO"] == mes_sel]
+                st.metric("Total de Ensaios Realizados", len(df_mes))
+                
+                st.divider()
+                st.write("🏆 **Ranking de Bandas:**")
                 ranking = df_mes["NOME DA BANDA"].value_counts().reset_index()
                 ranking.columns = ["Nome da Banda", "Quantidade de Ensaios"]
                 st.dataframe(ranking, use_container_width=True)
-            else:
-                ano_sel = mes_sel.split("/")[1]
-                df_ano = df_val[df_val["ANO"] == ano_sel]
-                ranking_ano = df_ano["NOME DA BANDA"].value_counts().reset_index()
-                ranking_ano.columns = ["Nome da Banda", "Quantidade de Ensaios no Ano"]
-                st.dataframe(ranking_ano, use_container_width=True)
         else:
-            st.info("Sem dados de agendamento disponíveis para estatísticas.")
+            st.info("Sem dados para estatísticas.")
 
-    # --- 3. FINANÇAS ---
     with sub_tab3:
-        st.subheader("💰 Faturamento Consolidado")
-        
+        st.subheader("💰 Faturamento")
         if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
             df_fin = df_agendamentos.copy()
             df_fin["DT"] = pd.to_datetime(df_fin["DATA"], format="%d/%m/%Y", errors="coerce")
@@ -423,46 +479,35 @@ elif aba == "⚙️ Administração":
                     return 0.0
                     
             df_fin["VALOR_NUM"] = df_fin["VALOR TOTAL"].apply(limpar_valor)
-            
             resumo_fin = df_fin.groupby("MES_ANO").agg(
                 TOTAL_ENSAIOS=("VALOR_NUM", "count"),
                 VALOR_BRUTO_ESTIMADO=("VALOR_NUM", "sum")
             ).reset_index()
             
-            resumo_fin["MÉDIA / VALOR BRUTO ESTIMADO"] = resumo_fin["VALOR_BRUTO_ESTIMADO"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            
-            st.write("📊 **Resumo de Arrecadação por Mês:**")
-            st.caption("Nota: Os valores são calculados com base no preço padrão das locações (Média Estimada), sem considerar eventuais descontos concedidos no momento do pagamento.")
-            st.dataframe(resumo_fin[["MES_ANO", "TOTAL_ENSAIOS", "MÉDIA / VALOR BRUTO ESTIMADO"]], use_container_width=True)
+            resumo_fin["VALOR BRUTO"] = resumo_fin["VALOR_BRUTO_ESTIMADO"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.dataframe(resumo_fin[["MES_ANO", "TOTAL_ENSAIOS", "VALOR BRUTO"]], use_container_width=True)
         else:
-            st.info("Sem dados financeiros disponíveis.")
+            st.info("Sem dados financeiros.")
 
-    # --- 4. BLACKLIST ---
     with sub_tab4:
-        st.subheader("🚫 Gestão de Blacklist (Inadimplentes)")
-        
+        st.subheader("🚫 Blacklist")
         if not df_blacklist.empty:
-            st.write("📋 **Bandas Atualmente na Blacklist:**")
             st.dataframe(df_blacklist, use_container_width=True)
         else:
-            st.info("Nenhuma banda registrada na Blacklist até o momento.")
+            st.info("Nenhuma banda na Blacklist.")
             
         st.divider()
-        st.write("➕ **Adicionar Linha na Blacklist (Copiar para a Planilha):**")
-        
         with st.form("form_blacklist"):
-            bl_banda = st.text_input("Nome da Banda *")
-            bl_cliente = st.text_input("Nome do Cliente / Responsável *")
-            bl_tel = st.text_input("Telefone (WhatsApp) *", placeholder="11976297814")
-            bl_data = st.date_input("Data do Ocorrido / Falta *", datetime.date.today())
-            bl_motivo = st.text_input("Motivo", value="Falta sem aviso / Inadimplência")
+            bl_banda = st.text_input("Banda *")
+            bl_cliente = st.text_input("Cliente / Responsável *")
+            bl_tel = st.text_input("Telefone *")
+            bl_data = st.date_input("Data do Ocorrido *", datetime.date.today())
+            bl_motivo = st.text_input("Motivo", value="Falta sem aviso")
             
-            sub_bl = st.form_submit_button("Gerar Registro de Blacklist")
-            
+            sub_bl = st.form_submit_button("Gerar Linha Blacklist", use_container_width=True)
             if sub_bl:
                 if not bl_banda or not bl_cliente or not bl_tel:
-                    st.error("Preencha todos os campos obrigatórios.")
+                    st.error("Preencha os campos obrigatórios.")
                 else:
-                    st.success("Linha gerada com sucesso!")
-                    st.warning("⚠️ Copie o texto abaixo e cole na aba **'Blacklist'** da sua Planilha do Google Drive:")
+                    st.success("Gerado com sucesso! Copie a linha para a aba Blacklist da planilha:")
                     st.code(f"{bl_banda}\t{bl_cliente}\t{bl_tel}\t{bl_data.strftime('%d/%m/%Y')}\t{bl_motivo}")
