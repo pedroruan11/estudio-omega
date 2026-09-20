@@ -7,7 +7,7 @@ from streamlit_calendar import calendar
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão de Ensaio - Estúdio Ómega", page_icon="🎵", layout="wide")
 
-# CSS para remover a bolinha azul (.fc-daygrid-event-dot), ajustar fonte e otimizar o espaço
+# CSS Personalizado
 st.markdown("""
 <style>
     .fc-daygrid-event-dot {
@@ -33,7 +33,7 @@ SHEET_ID = "1Cpz09lM3tPnx1kG2pk4UAKR3bgIQ8WPmMJnRP6EpLEY"
 def carregar_dados_aba(nome_aba):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nome_aba}"
     try:
-        df = pd.read_csv(url, dtype=str) # Lê tudo como Texto para evitar erros em senhas numéricas
+        df = pd.read_csv(url, dtype=str)
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
@@ -48,7 +48,6 @@ def login():
     if st.button("Entrar"):
         df_users = carregar_dados_aba("Administradores")
         if not df_users.empty and "USUÁRIO" in df_users.columns:
-            # Tratamento de texto para garantir comparação idêntica
             user_clean = username.strip().lower()
             pass_clean = password.strip()
             
@@ -59,6 +58,7 @@ def login():
             if not user_row.empty:
                 st.session_state["authenticated"] = True
                 st.session_state["user"] = user_row.iloc[0]["NOME"]
+                st.session_state["username_raw"] = user_row.iloc[0]["USUÁRIO"]
                 st.rerun()
             else:
                 st.error("Usuário ou senha incorretos.")
@@ -66,6 +66,7 @@ def login():
             if (username.strip() == "pedro" and password.strip() == "36950612") or (username.strip() == "fabio" and password.strip() == "admin123"):
                 st.session_state["authenticated"] = True
                 st.session_state["user"] = username
+                st.session_state["username_raw"] = username
                 st.rerun()
             else:
                 st.error("Erro ao validar dados na planilha.")
@@ -110,9 +111,10 @@ if st.sidebar.button("Sair"):
     st.session_state["authenticated"] = False
     st.rerun()
 
-aba = st.sidebar.radio("Navegação", ["📅 Ver Agenda", "📆 Calendário Mensal", "➕ Agendar Ensaio", "💬 Disparos WhatsApp"])
+aba = st.sidebar.radio("Navegação", ["📅 Ver Agenda", "📆 Calendário Mensal", "➕ Agendar Ensaio", "💬 Disparos WhatsApp", "⚙️ Administração"])
 
 df_agendamentos = carregar_dados_aba("Agendamentos")
+df_blacklist = carregar_dados_aba("Blacklist")
 
 # --- ABA 1: VER AGENDA ---
 if aba == "📅 Ver Agenda":
@@ -185,9 +187,9 @@ elif aba == "📆 Calendário Mensal":
         "editable": False,
     }
     
-    calendar(events=events, options=calendar_options, key="calendar_estudio_v5")
+    calendar(events=events, options=calendar_options, key="calendar_estudio_v6")
 
-# --- ABA 3: AGENDAR ENSAIO ---
+# --- ABA 3: AGENDAR ENSAIO (COM VALIDAÇÃO DE BLACKLIST) ---
 elif aba == "➕ Agendar Ensaio":
     st.header("➕ Novo Agendamento")
     
@@ -205,6 +207,7 @@ elif aba == "➕ Agendar Ensaio":
             hora_fim = st.time_input("Horário Final *", datetime.time(20, 0))
             
         eh_mensalista = st.checkbox("Cliente Mensalista (R$ 60/h)")
+        forcar_agendamento = st.checkbox("Ignorar alerta de Blacklist e prosseguir mesmo assim")
         
         submitted = st.form_submit_button("Confirmar Agendamento")
         
@@ -212,22 +215,40 @@ elif aba == "➕ Agendar Ensaio":
             if not nome_cliente or not telefone_cliente or not nome_banda:
                 st.error("Por favor, preencha todos os campos obrigatórios.")
             else:
-                valido, resultado = validar_agendamento(data, hora_inicio, hora_fim, eh_mensalista)
-                if not valido:
-                    st.error(f"Erro no agendamento: {resultado}")
+                # Verificar se o cliente/banda/telefone está na Blacklist
+                bloqueado = False
+                motivo_bloqueio = ""
+                if not df_blacklist.empty:
+                    tel_limpo_input = "".join(filter(str.isdigit, str(telefone_cliente)))
+                    for idx, row in df_blacklist.iterrows():
+                        banda_bl = str(row.get("NOME DA BANDA", "")).strip().lower()
+                        tel_bl = "".join(filter(str.isdigit, str(row.get("TELEFONE", ""))))
+                        
+                        if (banda_bl and banda_bl == nome_banda.strip().lower()) or (tel_bl and tel_bl == tel_limpo_input):
+                            bloqueado = True
+                            motivo_bloqueio = row.get("MOTIVO", "Inadimplência ou problemas no estúdio")
+                            break
+                
+                if bloqueado and not forcar_agendamento:
+                    st.error(f"⛔ **ATENÇÃO:** O cliente/banda **{nome_banda}** consta na **Blacklist** (Motivo: {motivo_bloqueio}).")
+                    st.warning("Se desejar agendar mesmo assim, marque a caixa **'Ignorar alerta de Blacklist e prosseguir mesmo assim'** acima e confirme novamente.")
                 else:
-                    valor_total = resultado
-                    st.success(f"Ensaio validado! Valor Total: R$ {valor_total:.2f}")
-                    
-                    st.warning("⚠️ Adicione a linha abaixo na sua Planilha do Google Sheets para salvar:")
-                    dias_semana_pt = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
-                    dia_str = dias_semana_pt[data.weekday()]
-                    st.code(f"{data.strftime('%d/%m/%Y')}\t{dia_str}\t{hora_inicio.strftime('%H:%M')}\t{hora_fim.strftime('%H:%M')}\t{nome_cliente}\t{telefone_cliente}\t{nome_banda}\t{'Mensalista' if eh_mensalista else 'Avulso'}\tR$ {valor_total:.2f}\tConfirmado")
-                    
-                    msg_confirmacao = f"Olá {nome_cliente}! Seus ensaio com a banda {nome_banda} está CONFIRMADO para o dia {data.strftime('%d/%m/%Y')} das {hora_inicio.strftime('%H:%M')} às {hora_fim.strftime('%H:%M')}. Valor: R$ {valor_total:.2f}. Nos vemos no estúdio!"
-                    link_wa = gerar_link_whatsapp(telefone_cliente, msg_confirmacao)
-                    
-                    st.markdown(f"[📲 Enviar Confirmação via WhatsApp]({link_wa})", unsafe_allow_html=True)
+                    valido, resultado = validar_agendamento(data, hora_inicio, hora_fim, eh_mensalista)
+                    if not valido:
+                        st.error(f"Erro no agendamento: {resultado}")
+                    else:
+                        valor_total = resultado
+                        st.success(f"Ensaio validado com sucesso! Valor Total: R$ {valor_total:.2f}")
+                        
+                        st.warning("⚠️ Cole a linha abaixo na sua Planilha do Google Sheets (Aba 'Agendamentos'):")
+                        dias_semana_pt = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
+                        dia_str = dias_semana_pt[data.weekday()]
+                        st.code(f"{data.strftime('%d/%m/%Y')}\t{dia_str}\t{hora_inicio.strftime('%H:%M')}\t{hora_fim.strftime('%H:%M')}\t{nome_cliente}\t{telefone_cliente}\t{nome_banda}\t{'Mensalista' if eh_mensalista else 'Avulso'}\tR$ {valor_total:.2f}\tConfirmado")
+                        
+                        msg_confirmacao = f"Olá {nome_cliente}! Seu ensaio com a banda {nome_banda} está CONFIRMADO para o dia {data.strftime('%d/%m/%Y')} das {hora_inicio.strftime('%H:%M')} às {hora_fim.strftime('%H:%M')}. Valor: R$ {valor_total:.2f}. Nos vemos no estúdio!"
+                        link_wa = gerar_link_whatsapp(telefone_cliente, msg_confirmacao)
+                        
+                        st.markdown(f"[📲 Enviar Confirmação via WhatsApp]({link_wa})", unsafe_allow_html=True)
 
 # --- ABA 4: DISPAROS WHATSAPP ---
 elif aba == "💬 Disparos WhatsApp":
@@ -255,3 +276,126 @@ elif aba == "💬 Disparos WhatsApp":
             st.info("Não há ensaios marcados para o dia de hoje.")
     else:
         st.info("Não há ensaios marcados para o dia de hoje.")
+
+# --- ABA 5: ADMINISTRAÇÃO ---
+elif aba == "⚙️ Administração":
+    st.header("⚙️ Painel de Administração")
+    
+    sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs(["👥 Gerenciar Usuários", "📊 Estatísticas", "💰 Finanças", "🚫 Blacklist"])
+    
+    # --- 1. GERENCIAR USUÁRIOS ---
+    with sub_tab1:
+        st.subheader("👥 Gerenciar Usuários & Alterar Senha")
+        df_users = carregar_dados_aba("Administradores")
+        
+        if not df_users.empty and "USUÁRIO" in df_users.columns:
+            st.dataframe(df_users[["USUÁRIO", "NOME"]], use_container_width=True)
+            
+            st.divider()
+            st.write("🔒 **Instruções para Alterar Senha:**")
+            st.info("Para alterar a sua senha ou adicionar um novo sócio, abra a aba **Administradores** na sua Planilha do Google Drive e edite diretamente a coluna **SENHA**.")
+            st.markdown(f"[📂 Abrir Planilha 'Administradores' no Google Drive](https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit#gid=0)", unsafe_allow_html=True)
+        else:
+            st.warning("Não foi possível carregar a lista de administradores.")
+
+    # --- 2. ESTATÍSTICAS ---
+    with sub_tab2:
+        st.subheader("📊 Estatísticas do Estúdio")
+        
+        if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
+            # Converter datas
+            df_agendamentos["DT"] = pd.to_datetime(df_agendamentos["DATA"], format="%d/%m/%Y", errors="coerce")
+            df_val = df_agendamentos.dropna(subset=["DT"]).copy()
+            
+            df_val["MES_ANO"] = df_val["DT"].dt.strftime("%m/%Y")
+            df_val["ANO"] = df_val["DT"].dt.strftime("%Y")
+            
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                meses_disp = sorted(df_val["MES_ANO"].unique().tolist(), reverse=True)
+                mes_sel = st.selectbox("Filtrar Estatísticas por Mês:", meses_disp)
+            
+            df_mes = df_val[df_val["MES_ANO"] == mes_sel]
+            
+            st.metric("Total de Ensaios no Mês Selecionado", len(df_mes))
+            
+            st.divider()
+            st.subheader("🏆 Ranking de Bandas que Mais Ensaiarem")
+            
+            tipo_ranking = st.radio("Visualizar Ranking por:", ["Por Mês", "Por Ano"], horizontal=True)
+            
+            if tipo_ranking == "Por Mês":
+                ranking = df_mes["NOME DA BANDA"].value_counts().reset_index()
+                ranking.columns = ["Nome da Banda", "Quantidade de Ensaios"]
+                st.dataframe(ranking, use_container_width=True)
+            else:
+                ano_sel = mes_sel.split("/")[1]
+                df_ano = df_val[df_val["ANO"] == ano_sel]
+                ranking_ano = df_ano["NOME DA BANDA"].value_counts().reset_index()
+                ranking_ano.columns = ["Nome da Banda", "Quantidade de Ensaios no Ano"]
+                st.dataframe(ranking_ano, use_container_width=True)
+        else:
+            st.info("Sem dados de agendamento disponíveis para estatísticas.")
+
+    # --- 3. FINANÇAS ---
+    with sub_tab3:
+        st.subheader("💰 Faturamento Consolidado")
+        
+        if not df_agendamentos.empty and "DATA" in df_agendamentos.columns:
+            df_fin = df_agendamentos.copy()
+            df_fin["DT"] = pd.to_datetime(df_fin["DATA"], format="%d/%m/%Y", errors="coerce")
+            df_fin = df_fin.dropna(subset=["DT"])
+            df_fin["MES_ANO"] = df_fin["DT"].dt.strftime("%m/%Y")
+            
+            # Limpar coluna de valor (remover R$, converter vírgula)
+            def limpar_valor(v):
+                try:
+                    v_str = str(v).replace("R$", "").replace(".", "").replace(",", ".").strip()
+                    return float(v_str)
+                except:
+                    return 0.0
+                    
+            df_fin["VALOR_NUM"] = df_fin["VALOR TOTAL"].apply(limpar_valor)
+            
+            resumo_fin = df_fin.groupby("MES_ANO").agg(
+                TOTAL_ENSAIOS=("VALOR_NUM", "count"),
+                VALOR_BRUTO_ESTIMADO=("VALOR_NUM", "sum")
+            ).reset_index()
+            
+            resumo_fin["MÉDIA / VALOR BRUTO ESTIMADO"] = resumo_fin["VALOR_BRUTO_ESTIMADO"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            
+            st.write("📊 **Resumo de Arrecadação por Mês:**")
+            st.caption("Nota: Os valores são calculados com base no preço padrão das locações (Média Estimada), sem considerar eventuais descontos concedidos no momento do pagamento.")
+            st.dataframe(resumo_fin[["MES_ANO", "TOTAL_ENSAIOS", "MÉDIA / VALOR BRUTO ESTIMADO"]], use_container_width=True)
+        else:
+            st.info("Sem dados financeiros disponíveis.")
+
+    # --- 4. BLACKLIST ---
+    with sub_tab4:
+        st.subheader("🚫 Gestão de Blacklist (Inadimplentes)")
+        
+        if not df_blacklist.empty:
+            st.write("📋 **Bandas Atualmente na Blacklist:**")
+            st.dataframe(df_blacklist, use_container_width=True)
+        else:
+            st.info("Nenhuma banda registrada na Blacklist até o momento.")
+            
+        st.divider()
+        st.write("➕ **Adicionar Linha na Blacklist (Copiar para a Planilha):**")
+        
+        with st.form("form_blacklist"):
+            bl_banda = st.text_input("Nome da Banda *")
+            bl_cliente = st.text_input("Nome do Cliente / Responsável *")
+            bl_tel = st.text_input("Telefone (WhatsApp) *", placeholder="11976297814")
+            bl_data = st.date_input("Data do Ocorrido / Falta *", datetime.date.today())
+            bl_motivo = st.text_input("Motivo", value="Falta sem aviso / Inadimplência")
+            
+            sub_bl = st.form_submit_button("Gerar Registro de Blacklist")
+            
+            if sub_bl:
+                if not bl_banda or not bl_cliente or not bl_tel:
+                    st.error("Preencha todos os campos obrigatórios.")
+                else:
+                    st.success("Linha gerada com sucesso!")
+                    st.warning("⚠️ Copie o texto abaixo e cole na aba **'Blacklist'** da sua Planilha do Google Drive:")
+                    st.code(f"{bl_banda}\t{bl_cliente}\t{bl_tel}\t{bl_data.strftime('%d/%m/%Y')}\t{bl_motivo}")
