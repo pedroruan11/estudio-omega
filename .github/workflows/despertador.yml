@@ -1,13 +1,10 @@
-# "Despertador": acessa o sistema a cada 10 minutos no horário de atendimento,
-# para o Render (plano gratuito) não dormir e o app abrir rápido no celular.
-# Horário de Brasília (UTC-3) 08h–01h = 11h–04h UTC. Não consulta o banco (rota /saude).
-# Minutos 3, 13, 23... para fugir da virada da hora, quando o GitHub mais atrasa.
+# "Despertador" manual: acessa a rota /saude (não consulta o banco) para acordar o app no Render.
+# O agendamento automático foi removido em 06/11/2026: o cron do GitHub (plano gratuito) não disparava.
+# Quem mantém o app acordado agora é o cron-job.org (ver README).
+# Para rodar na mão: Actions → Despertador → Run workflow.
 name: Despertador
 
 on:
-  schedule:
-    - cron: "3-59/10 11-23 * * *"
-    - cron: "3-59/10 0-3 * * *"
   workflow_dispatch:
 
 jobs:
