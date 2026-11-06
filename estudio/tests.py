@@ -401,3 +401,15 @@ class BackupTest(Base):
         Backup.objects.filter(pk=b.pk).update(criado_em=timezone.now() - timedelta(days=40))
         self.client.get(reverse("inicio"))
         self.assertEqual(Backup.objects.filter(tipo=Backup.Tipo.AUTOMATICO).count(), 2)
+
+
+class BlacklistTelaTest(Base):
+    def test_colocar_na_blacklist_pela_ficha(self):
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("cliente", args=[self.fire.pk]))
+        self.assertContains(r, 'id="abrir-bl"')
+        r = self.client.post(reverse("cliente_blacklist", args=[self.fire.pk]), {"acao": "por", "motivo": "Quebrou o pedal"})
+        self.assertEqual(r.status_code, 302)
+        self.fire.refresh_from_db()
+        self.assertTrue(self.fire.na_blacklist)
+        self.assertEqual(self.fire.motivo_blacklist, "Quebrou o pedal")

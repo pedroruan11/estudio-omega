@@ -67,11 +67,21 @@
 {% if c.blacklist_manual %}
 {% if user.is_admin %}<form method="post" action="{% url 'cliente_blacklist' c.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="tirar"><button class="btn" type="submit">Tirar da blacklist</button></form>{% endif %}
 {% else %}
-<details class="card fino"><summary class="btn perigo" style="list-style:none">Colocar na blacklist</summary>
-<form method="post" action="{% url 'cliente_blacklist' c.pk %}" style="display:flex;flex-direction:column;gap:10px;margin-top:12px">{% csrf_token %}
-<input type="hidden" name="acao" value="por"><label class="campo">Motivo<input type="text" name="motivo" required placeholder="Ex.: deixou a sala bagunçada"></label>
-<button class="btn perigo-cheio" type="submit">Confirmar blacklist</button></form>
-</details>
+<button type="button" class="btn perigo" id="abrir-bl" aria-expanded="false" aria-controls="form-bl">Colocar na blacklist</button>
+<form method="post" action="{% url 'cliente_blacklist' c.pk %}" id="form-bl" class="card fino oculto" style="flex-direction:column;gap:10px;scroll-margin-bottom:120px">{% csrf_token %}
+<input type="hidden" name="acao" value="por">
+<label class="campo">Motivo da blacklist<input type="text" name="motivo" id="motivo-bl" required placeholder="Ex.: deixou a sala bagunçada"></label>
+<button class="btn perigo-cheio" type="submit">Confirmar blacklist</button>
+<button class="btn" type="button" id="fechar-bl" style="border:0">Cancelar</button>
+</form>
 {% endif %}
 </main>
+{% endblock %}
+{% block js %}
+<script>
+(()=>{const b=document.getElementById('abrir-bl'),f=document.getElementById('form-bl');if(!b||!f)return;
+b.addEventListener('click',()=>{f.classList.remove('oculto');f.style.display='flex';b.classList.add('oculto');b.setAttribute('aria-expanded','true');
+f.scrollIntoView({behavior:'smooth',block:'end'});setTimeout(()=>document.getElementById('motivo-bl').focus(),300)});
+document.getElementById('fechar-bl').addEventListener('click',()=>{f.classList.add('oculto');f.style.display='';b.classList.remove('oculto');b.setAttribute('aria-expanded','false')});})();
+</script>
 {% endblock %}
