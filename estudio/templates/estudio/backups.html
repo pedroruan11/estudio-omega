@@ -22,23 +22,17 @@
 {% if lista %}
 <div class="lista">
 {% for b in lista %}
-<details class="item" style="display:block;padding:0">
-<summary style="list-style:none;cursor:pointer;min-height:64px;padding:10px 16px;display:flex;align-items:center;gap:12px">
-<span class="item-txt"><b>{{ b.criado_em|date:"d/m/Y H:i" }}</b><span class="sub" style="font-size:12.5px">{{ b.get_tipo_display }} · {{ b.registros }} registros · {{ b.tamanho|filesizeformat }}</span></span>
-{% if b.drive_status == 'enviado' %}<span class="pilula ok">Drive</span>{% elif b.drive_status == 'erro' %}<span class="pilula perigo">Drive falhou</span>{% endif %}
-</summary>
-<div style="padding:0 16px 14px;display:flex;flex-direction:column;gap:8px">
+<div class="item" style="display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:12px 16px">
+<div class="linha"><span class="item-txt"><b>{{ b.criado_em|date:"d/m/Y H:i" }}</b><span class="sub" style="font-size:12.5px">{{ b.get_tipo_display }} · {{ b.registros }} registros · {{ b.tamanho|filesizeformat }}</span></span>
+{% if b.drive_status == 'enviado' %}<span class="pilula ok">Drive</span>{% elif b.drive_status == 'erro' %}<span class="pilula perigo">Drive falhou</span>{% endif %}</div>
 {% if b.drive_status == 'erro' %}<span class="sub" style="font-size:12px">{{ b.drive_detalhe }}</span>{% endif %}
-<div class="grade2">
+<div style="display:grid;grid-template-columns:repeat({% if drive and b.drive_status != 'enviado' %}4{% else %}3{% endif %},minmax(0,1fr));gap:6px">
 <a class="btn pequeno" href="{% url 'backup_baixar' b.pk %}">Baixar</a>
 <a class="btn pequeno" href="{% url 'backup_restaurar' b.pk %}">Restaurar</a>
-</div>
-<div class="grade2">
-{% if drive and b.drive_status != 'enviado' %}<form method="post" action="{% url 'backup_drive' b.pk %}">{% csrf_token %}<button class="btn pequeno" type="submit">Enviar ao Drive</button></form>{% else %}<span></span>{% endif %}
+{% if drive and b.drive_status != 'enviado' %}<form method="post" action="{% url 'backup_drive' b.pk %}">{% csrf_token %}<button class="btn pequeno" type="submit">Drive</button></form>{% endif %}
 <form method="post" action="{% url 'backup_excluir' b.pk %}">{% csrf_token %}<button class="btn pequeno perigo" type="submit">Excluir</button></form>
 </div>
 </div>
-</details>
 {% endfor %}
 </div>
 {% else %}<div class="sub">Nenhum backup guardado.</div>{% endif %}
