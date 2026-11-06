@@ -467,3 +467,28 @@ class CobrancaMultaTest(Base):
         self.client.force_login(self.edicao)
         r = self.client.post(reverse("cliente_multa", args=[self.fire.pk]), {"valor": "10"})
         self.assertEqual(r.status_code, 403)
+
+
+class PagarTiraDaBlacklistTest(Base):
+    def test_pagar_multa_tira_blacklist_manual(self):
+        self.fire.blacklist_manual = True
+        self.fire.motivo_blacklist = "Quebrou o pedal"
+        self.fire.save()
+        regras.lancar_multa(self.admin, self.fire, Decimal("150"), "Pedal")
+        ag = self.agendar(usuario=self.admin, confirmar_blacklist=True)
+        regras.confirmar_pagamento_multa(self.admin, ag, agora=ag.fim + timedelta(minutes=1))
+        self.fire.refresh_from_db()
+        self.assertFalse(self.fire.na_blacklist)
+        self.assertTrue(self.fire.anotacoes.filter(texto__contains="Saiu da blacklist").exists())
+
+    def test_quitar_ultimo_debito_tira_blacklist_manual(self):
+        self.fire.blacklist_manual = True
+        self.fire.save()
+        d1 = regras.lancar_multa(self.admin, self.fire, Decimal("50"), "a")
+        d2 = regras.lancar_multa(self.admin, self.fire, Decimal("60"), "b")
+        regras.quitar_debito(self.admin, d1)
+        self.fire.refresh_from_db()
+        self.assertTrue(self.fire.na_blacklist)  # ainda falta d2
+        regras.quitar_debito(self.admin, d2)
+        self.fire.refresh_from_db()
+        self.assertFalse(self.fire.na_blacklist)

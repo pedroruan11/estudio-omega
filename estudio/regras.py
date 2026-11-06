@@ -259,7 +259,24 @@ def quitar_debito(usuario, debito, agora=None):
     debito.quitado_em = agora or timezone.now()
     debito.quitado_por = usuario
     debito.save()
+    if not debito.cliente.debitos_abertos().exists():
+        _liberar_blacklist_manual(usuario, debito.cliente)
     return debito
+
+
+def _liberar_blacklist_manual(usuario, cliente):
+    """Multa paga: a banda sai também da blacklist manual (regra do Pedro, 06/11/2026)."""
+    if cliente.blacklist_manual:
+        from .models import Anotacao
+
+        motivo = cliente.motivo_blacklist
+        cliente.blacklist_manual = False
+        cliente.motivo_blacklist = ""
+        cliente.save(update_fields=["blacklist_manual", "motivo_blacklist"])
+        Anotacao.objects.create(
+            cliente=cliente, autor=usuario,
+            texto=f"Saiu da blacklist ao pagar a multa (motivo anterior: {motivo or 'não informado'}).",
+        )
 
 
 def tirar_da_blacklist(usuario, cliente):
@@ -314,6 +331,7 @@ def confirmar_pagamento_multa(usuario, ag, agora=None):
             d.quitado_por = usuario
             d.save(update_fields=["quitado_em", "quitado_por"])
         Agendamento.objects.filter(cliente=ag.cliente, cobranca_conferida=False, fim__lte=agora).update(cobranca_conferida=True)
+        _liberar_blacklist_manual(usuario, ag.cliente)
     return quitados
 
 
