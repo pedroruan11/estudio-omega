@@ -1,0 +1,53 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Novo cliente{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'clientes' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Novo cliente</h1></header>
+{% endblock %}
+{% block conteudo %}
+<form method="post" id="form-cli" style="display:flex;flex-direction:column;flex:1">{% csrf_token %}
+<main class="conteudo" style="gap:16px">
+{% if form.errors %}<div class="erro" role="alert">{% for f in form %}{% for e in f.errors %}{{ e }} {% endfor %}{% endfor %}</div>{% endif %}
+{% if existentes %}
+<div class="aviso" role="alert" style="display:flex;flex-direction:column;gap:10px">
+<b>Esse WhatsApp já está cadastrado.</b>
+{% for ct in existentes %}
+<div style="display:flex;flex-direction:column;gap:6px">
+<span>{{ ct.nome }} · {{ ct.whatsapp_formatado }}</span>
+<span class="sub" style="font-size:13px">Bandas: {% for cl in ct.clientes.all %}{{ cl.nome }}{% if not forloop.last %}, {% endif %}{% empty %}nenhuma{% endfor %}</span>
+<button class="btn ouro pequeno" type="submit" name="usar_contato" value="{{ ct.pk }}">É uma banda nova de {{ ct.nome }}</button>
+</div>
+{% endfor %}
+<button class="btn pequeno" type="submit" name="contato_novo" value="on">É outra pessoa com o mesmo número</button>
+</div>
+{% endif %}
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Tipo</legend>
+<div class="grade2">
+<label class="chip"><input type="radio" name="tipo" value="banda"{% if form.tipo.value != 'artista' %} checked{% endif %}><span>Banda</span></label>
+<label class="chip"><input type="radio" name="tipo" value="artista"{% if form.tipo.value == 'artista' %} checked{% endif %}><span>Artista / pessoa</span></label>
+</div></fieldset>
+<label class="campo"><span id="rotulo-nome">Nome da banda *</span><input type="text" name="nome" required value="{{ form.nome.value|default:'' }}" id="nome"></label>
+<label class="campo" id="campo-resp">Responsável *<input type="text" name="responsavel" value="{{ form.responsavel.value|default:'' }}" placeholder="Quem fala com o estúdio"></label>
+<label class="campo">WhatsApp *<input type="tel" inputmode="tel" name="whatsapp" required value="{{ form.whatsapp.value|default:'' }}" placeholder="(11) 9 0000-0000"><small>Se o número já existir, o sistema mostra a pessoa e as bandas dela.</small></label>
+<label class="campo">Instagram (opcional)<input type="text" name="instagram" value="{{ form.instagram.value|default:'' }}" placeholder="@perfil" autocapitalize="none"></label>
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Como nos conheceu? (opcional)</legend>
+<div class="chips redondos">
+{% for v, l in form.fields.origem.choices %}{% if v %}<label class="chip"><input type="radio" name="origem" value="{{ v }}"{% if form.origem.value == v %} checked{% endif %}><span>{{ l }}</span></label>{% endif %}{% endfor %}
+</div></fieldset>
+<label class="campo">Anotação (opcional)<textarea name="anotacao" rows="2" placeholder="Ex.: estilo, quantos integrantes, preferências">{{ form.anotacao.value|default:'' }}</textarea></label>
+</main>
+<div class="rodape-fixo" style="flex-direction:row">
+<button class="btn" type="submit" name="depois" value="ficha">Salvar</button>
+<button class="btn ouro" type="submit" name="depois" value="agendar">SALVAR E AGENDAR</button>
+</div>
+</form>
+{% endblock %}
+{% block js %}
+<script>
+(()=>{const f=document.getElementById('form-cli');
+function ajustar(){const banda=(f.querySelector('input[name=tipo]:checked')||{}).value!=='artista';
+document.getElementById('rotulo-nome').textContent=banda?'Nome da banda *':'Nome *';
+document.getElementById('nome').placeholder=banda?'Ex.: FIRE':'Nome completo';
+document.getElementById('campo-resp').classList.toggle('oculto',!banda)}
+f.addEventListener('change',e=>{if(e.target.name==='tipo')ajustar()});ajustar();})();
+</script>
+{% endblock %}

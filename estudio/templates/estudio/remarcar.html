@@ -1,0 +1,40 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Remarcar{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'agendamento' ag.pk %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Remarcar</h1></header>
+{% endblock %}
+{% block conteudo %}
+<form method="post" id="form-ag" style="display:flex;flex-direction:column;flex:1">{% csrf_token %}
+<main class="conteudo" style="gap:18px">
+<div class="card fino"><b>{{ ag.cliente }}</b><div class="sub">Hoje: {{ ag.get_tipo_display }} · {{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }}</div></div>
+{% if tardio %}<div class="erro">Faltam menos de 48h: ao remarcar, será gerada uma taxa de {{ taxa }} e o cliente entra na blacklist até pagar.</div>{% endif %}
+{% if erro %}<div class="erro" role="alert">{{ erro }}</div>{% endif %}
+<input type="radio" name="tipo" value="{{ ag.tipo }}" checked hidden>
+<label class="campo">Novo dia<input type="date" name="data" id="data" value="{{ data }}" required><small id="janela"></small></label>
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Duração</legend>
+<div class="chips grade">{% for h in "123456" %}<label class="chip"><input type="radio" name="horas" value="{{ h }}"{% if horas|stringformat:"s" == h %} checked{% endif %}><span>{{ h }}h</span></label>{% endfor %}</div></fieldset>
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px" id="titulo-horarios">Horários livres</legend><div class="chips" id="horarios"></div></fieldset>
+</main>
+<div class="rodape-fixo"><button class="btn ouro" type="submit" style="min-height:54px">CONFIRMAR REMARCAÇÃO</button></div>
+</form>
+{% endblock %}
+{% block js %}
+<script>
+(()=>{
+const minimo={ensaio:{{ cfg.min_horas_ensaio }},gravacao:{{ cfg.min_horas_gravacao }}};
+const f=document.getElementById('form-ag'),$=s=>f.querySelector(s),tipo="{{ ag.tipo }}";
+const horas=()=>parseInt(($('input[name=horas]:checked')||{}).value||'0');
+async function carregar(){
+  f.querySelectorAll('input[name=horas]').forEach(r=>{r.disabled=parseInt(r.value)<minimo[tipo]});
+  const d=$('#data').value,h=horas(),box=document.getElementById('horarios');
+  if(!d||!h){box.innerHTML='';return}
+  const j=await (await fetch(`{% url 'horarios_json' %}?data=${d}&tipo=${tipo}&horas=${h}&ignorar={{ ag.pk }}`)).json();
+  document.getElementById('janela').textContent=j.janela?`Sala aberta das ${String(j.janela[0]).padStart(2,'0')}:00 às ${String(j.janela[1]%24).padStart(2,'0')}:00`:'A sala não funciona nesse dia.';
+  box.innerHTML=j.livres.length?'':'<span class="sub" style="text-transform:none;letter-spacing:0">Nenhum horário livre com essa duração neste dia.</span>';
+  j.livres.forEach(hh=>{const l=document.createElement('label');l.className='chip';const i=document.createElement('input');i.type='radio';i.name='hora';i.value=hh;i.required=true;const s=document.createElement('span');s.textContent=String(hh).padStart(2,'0')+':00';l.append(i,s);box.append(l)});
+}
+f.addEventListener('change',e=>{if(['horas','data'].includes(e.target.name))carregar()});
+carregar();
+})();
+</script>
+{% endblock %}

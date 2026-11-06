@@ -1,0 +1,20 @@
+{% extends "estudio/base.html" %}{% load static %}
+{% block titulo %}Entrar{% endblock %}
+{% block conteudo %}
+<main class="entrar">
+<img src="{% static 'estudio/img/logo-512.png' %}" alt="Logotipo Omega Studios">
+<div class="centro" style="display:flex;flex-direction:column;gap:6px">
+<h1 style="margin:0;font-size:24px">Bem-vindo de volta</h1>
+<p class="sub" style="margin:0">Gestão do estúdio · acesso da equipe</p>
+</div>
+<form method="post" style="display:flex;flex-direction:column;gap:16px">{% csrf_token %}
+{% if form.errors %}<div class="erro">Usuário ou senha incorretos.</div>{% endif %}
+<label class="campo">Usuário<input type="text" name="username" autocomplete="username" autocapitalize="none" required value="{{ form.username.value|default:'' }}"></label>
+<label class="campo">Senha<input type="password" name="password" autocomplete="current-password" required></label>
+<label class="check"><input type="checkbox" name="lembrar" checked> Manter conectado neste celular</label>
+<input type="hidden" name="next" value="{{ next }}">
+<button class="btn ouro" type="submit" style="min-height:54px;font-size:16px;margin-top:8px">ENTRAR</button>
+</form>
+<p class="centro" style="margin:auto 0 0;font-size:13px;color:var(--fraco)">Esqueceu a senha? Fale com um administrador.</p>
+</main>
+{% endblock %}

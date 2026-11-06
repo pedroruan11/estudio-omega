@@ -1,0 +1,38 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Agendamento{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'agenda' %}?d={{ ini|date:'Y-m-d' }}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Agendamento</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo">
+{% if novo and whats_confirmacao %}
+<a class="btn ouro" style="min-height:54px" href="{{ whats_confirmacao }}" target="_blank" rel="noopener">AVISAR O CLIENTE NO WHATSAPP</a>
+{% endif %}
+<div class="card" style="display:flex;flex-direction:column;gap:12px{% if ag.tipo == 'gravacao' %};border-color:var(--txt){% endif %}">
+<div class="linha"><a href="{% url 'cliente' ag.cliente.pk %}" class="titulo-card" style="color:var(--txt);text-decoration:none;font-size:20px">{{ ag.cliente }}</a>
+<span class="pilula{% if ag.status == 'cancelado' %} cinza{% elif ag.status == 'falta' %} perigo{% elif ag.tipo == 'gravacao' %} clara{% endif %}">{% if ag.status == 'agendado' %}{{ ag.get_tipo_display }}{% else %}{{ ag.get_status_display }}{% endif %}</span></div>
+<div class="dados">
+<div><span>Dia</span><span>{{ dia }}</span></div>
+<div><span>Horário</span><span>{{ ini|time:"H:i" }} às {{ fim|time:"H:i" }} ({{ ag.horas }}h)</span></div>
+<div><span>Tipo</span><span>{{ ag.get_tipo_display }}</span></div>
+<div><span>Valor</span><span>{{ valor }}</span></div>
+{% if ag.contato %}<div><span>Contato</span><span>{{ ag.contato.nome }} · {{ ag.contato.whatsapp_formatado }}</span></div>{% endif %}
+{% if ag.observacao %}<div><span>Observação</span><span>{{ ag.observacao }}</span></div>{% endif %}
+<div><span>Agendado por</span><span>{{ ag.criado_por|default:"—" }} · {{ ag.criado_em|date:"d/m H:i" }}</span></div>
+{% if ag.remarcacoes %}<div><span>Remarcações</span><span>{{ ag.remarcacoes }}</span></div>{% endif %}
+</div>
+</div>
+{% for d in debitos %}<div class="card perigo"><span style="font-size:14px"><b>{{ d.get_motivo_display }}</b> · R$ {{ d.valor|floatformat:2 }} · {% if d.aberto %}em aberto{% else %}quitado em {{ d.quitado_em|date:"d/m" }}{% endif %}</span></div>{% endfor %}
+{% if ativo %}
+{% if whats_lembrete %}<a class="btn" href="{{ whats_lembrete }}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg>Lembrete no WhatsApp</a>{% endif %}
+<div class="grade2">
+{% if pode_remarcar %}<a class="btn" href="{% url 'agendamento_remarcar' ag.pk %}">Remarcar</a>{% else %}<span class="btn" style="opacity:.5" title="Só administrador">Remarcar</span>{% endif %}
+<a class="btn perigo" href="{% url 'agendamento_cancelar' ag.pk %}">Cancelar</a>
+</div>
+{% if tardio and not user.is_admin %}<p class="sub" style="margin:0;font-size:12.5px">Faltam menos de 48h: remarcar só com um administrador. Cancelar agora gera taxa.</p>{% elif tardio %}<p class="sub" style="margin:0;font-size:12.5px">Faltam menos de 48h: cancelar ou remarcar agora gera taxa.</p>{% endif %}
+{% if pode_falta %}
+<form method="post" action="{% url 'agendamento_falta' ag.pk %}">{% csrf_token %}<button class="btn perigo" type="submit">Marcar falta (não veio)</button></form>
+{% endif %}
+{% endif %}
+</main>
+{% endblock %}

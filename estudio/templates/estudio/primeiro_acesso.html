@@ -1,0 +1,19 @@
+{% extends "estudio/base.html" %}{% load static %}
+{% block titulo %}Primeiro acesso{% endblock %}
+{% block conteudo %}
+<main class="entrar">
+<img src="{% static 'estudio/img/logo-512.png' %}" alt="Logotipo Omega Studios" style="width:120px;height:120px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<h1 style="margin:0;font-size:24px">Primeiro acesso</h1>
+<p class="sub" style="margin:0">O sistema ainda não tem usuários. Crie o primeiro <b style="color:var(--ouro)">Administrador</b>. Depois disso, esta tela some.</p>
+</div>
+<form method="post" style="display:flex;flex-direction:column;gap:16px">{% csrf_token %}
+{% if form.errors %}<div class="erro">{% for f in form %}{% for e in f.errors %}{{ e }}<br>{% endfor %}{% endfor %}{{ form.non_field_errors }}</div>{% endif %}
+<label class="campo">Seu nome<input type="text" name="first_name" required value="{{ form.first_name.value|default:'' }}"></label>
+<label class="campo">Usuário (para entrar)<input type="text" name="username" autocapitalize="none" required value="{{ form.username.value|default:'' }}"><small>Sem espaços. Ex.: pedro</small></label>
+<label class="campo">Senha<input type="password" name="password1" autocomplete="new-password" required><small>Mínimo de 8 caracteres.</small></label>
+<label class="campo">Repita a senha<input type="password" name="password2" autocomplete="new-password" required></label>
+<button class="btn ouro" type="submit" style="min-height:54px">CRIAR ADMINISTRADOR</button>
+</form>
+</main>
+{% endblock %}

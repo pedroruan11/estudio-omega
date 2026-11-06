@@ -1,0 +1,38 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Cliente na blacklist{% endblock %}
+{% block conteudo %}
+<div class="folha-fundo">
+<section class="folha" role="dialog" aria-modal="true" aria-labelledby="bl-titulo">
+<div class="puxador" aria-hidden="true"></div>
+<div style="display:flex;align-items:center;gap:12px">
+<div class="alerta-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg></div>
+<div><span class="kicker" style="color:var(--perigo)">Cliente na blacklist</span><h2 id="bl-titulo" style="margin:0;font-size:20px">{{ cliente }}</h2></div>
+</div>
+{% if debitos %}
+<div class="card perigo" style="display:flex;flex-direction:column;gap:6px">
+<div class="linha"><span style="font-weight:600">Débito em aberto</span><span class="num" style="color:var(--perigo);font-size:20px">{{ total }}</span></div>
+{% for d in debitos %}<span style="font-size:13px;color:var(--txt2)">{{ d.get_motivo_display }} · {{ d.descricao }}</span>{% endfor %}
+</div>
+{% endif %}
+{% if cliente.blacklist_manual %}<div class="card perigo"><span style="font-size:14px"><b>Motivo:</b> {{ cliente.motivo_blacklist|default:"não informado" }}</span></div>{% endif %}
+<span class="kicker">Histórico</span>
+<div class="grade3">
+<div class="card fino" style="background:var(--s2)"><span class="num" style="font-size:18px">{{ qtd }}</span><span class="rotulo">agendamentos</span></div>
+<div class="card fino" style="background:var(--s2)"><span class="num" style="font-size:18px">{{ tardios }}</span><span class="rotulo">tardios</span></div>
+<div class="card fino" style="background:var(--s2)"><span class="num" style="font-size:18px">{{ faltas }}</span><span class="rotulo">faltas</span></div>
+</div>
+{% for a in anotacoes %}<div class="card fino" style="background:var(--s2)"><span class="rotulo">{{ a.autor|default:"—" }} · {{ a.criado_em|date:"d/m" }}</span><div style="font-size:14px">{{ a.texto }}</div></div>{% endfor %}
+{% if user.is_admin %}
+<form method="post" action="{% url 'agendamento_novo' %}">{% csrf_token %}
+{% for k, v in dados.items %}{% if k != 'csrfmiddlewaretoken' and k != 'confirmar_blacklist' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+<input type="hidden" name="confirmar_blacklist" value="on">
+<button class="btn" style="border-color:var(--ouro);color:var(--ouro);min-height:52px" type="submit">AGENDAR MESMO ASSIM (ADMIN)</button>
+</form>
+{% else %}
+<p class="sub centro" style="margin:0">Só um administrador pode concluir este agendamento.</p>
+{% endif %}
+<a class="btn" href="{% url 'cliente' cliente.pk %}">Ver ficha do cliente</a>
+<a class="btn" style="border:0" href="{% url 'agendamento_novo' %}">Voltar</a>
+</section>
+</div>
+{% endblock %}

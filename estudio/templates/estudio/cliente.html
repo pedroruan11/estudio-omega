@@ -1,0 +1,77 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}{{ c.nome }}{% endblock %}
+{% block topo %}
+<header class="topo"><a class="voltar" href="{% url 'clientes' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><a class="btn link" href="{% url 'cliente_editar' c.pk %}">Editar</a></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:18px">
+<div style="display:flex;align-items:center;gap:14px">
+<div class="av grande">{{ c.inicial }}</div>
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+<h1 style="margin:0;font-size:24px">{{ c.nome }}</h1>
+{% if contato %}<span class="sub">{{ contato.nome }}{% if c.tipo == 'banda' %} · responsável{% endif %}</span>{% endif %}
+<span>{% if bl %}<span class="pilula perigo">Blacklist</span>{% else %}<span class="pilula ok">Em dia</span>{% endif %}</span>
+</div>
+</div>
+
+{% for a in avisos %}<div class="aviso">{{ a.contato.nome }} tem débito na casa: R$ {{ a.debito.valor|floatformat:2 }} ({{ a.debito.cliente }}).</div>{% endfor %}
+
+{% if debitos %}
+<div class="card perigo" style="display:flex;flex-direction:column;gap:10px">
+<div class="linha"><span style="font-weight:600">Débito em aberto</span><span class="num" style="color:var(--perigo);font-size:20px">{{ total }}</span></div>
+{% for d in debitos %}
+<div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--perigo-borda);padding-top:10px">
+<span style="font-size:13px;color:var(--txt2)">{{ d.get_motivo_display }} · {{ d.descricao }} · R$ {{ d.valor|floatformat:2 }}</span>
+{% if user.is_admin %}<form method="post" action="{% url 'debito_quitar' d.pk %}">{% csrf_token %}<button class="btn pequeno" type="submit">Marcar como pago</button></form>{% endif %}
+</div>
+{% endfor %}
+{% if not user.is_admin %}<span class="sub" style="font-size:12.5px">Só um administrador dá baixa no débito.</span>{% endif %}
+</div>
+{% endif %}
+{% if c.blacklist_manual %}<div class="card perigo"><span style="font-size:14px"><b>Na blacklist:</b> {{ c.motivo_blacklist }}</span></div>{% endif %}
+
+<div class="grade2">
+{% if contato %}<a class="btn ouro" href="https://wa.me/{{ contato.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
+<a class="btn" href="{% url 'agendamento_novo' %}?cliente={{ c.pk }}">+ Agendar</a>
+</div>
+
+<div class="grade3">
+<div class="card fino"><span class="num" style="font-size:20px">{{ qtd }}</span><span class="rotulo">realizados</span></div>
+<div class="card fino"><span class="num" style="font-size:20px">{{ horas }}h</span><span class="rotulo">no estúdio</span></div>
+<div class="card fino"><span class="num" style="font-size:20px">{{ faltas }}</span><span class="rotulo">faltas</span></div>
+</div>
+
+<span class="kicker">Próximos</span>
+{% if proximos %}<div class="lista">{% for a in proximos %}<a href="{% url 'agendamento' a.pk %}"><span class="item-txt"><b>{{ a.inicio|date:"D d/m" }} · {{ a.inicio|time:"H:i" }}–{{ a.fim|time:"H:i" }}</b><span class="sub" style="font-size:13px">{{ a.get_tipo_display }} · {{ a.horas }}h</span></span></a>{% endfor %}</div>
+{% else %}<div class="sub">Nenhum agendamento futuro.</div>{% endif %}
+
+<div class="linha"><span class="kicker">Anotações</span></div>
+<form method="post" action="{% url 'cliente_anotacao' c.pk %}" style="display:flex;gap:8px">{% csrf_token %}
+<input type="text" name="texto" placeholder="Nova anotação…" aria-label="Nova anotação" required><button class="btn icone ouro" type="submit" aria-label="Salvar anotação"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+</form>
+{% for a in anotacoes %}<div class="card fino"><span class="rotulo">{{ a.autor|default:"—" }} · {{ a.criado_em|date:"d/m/Y H:i" }}</span><div style="font-size:14px;white-space:pre-line">{{ a.texto }}</div></div>{% endfor %}
+
+<span class="kicker">Contatos</span>
+<div class="card fino dados">
+{% for v in vinculos %}<div><span>{{ v.contato.nome }}{% if v.principal %} (principal){% endif %}</span><span><a href="https://wa.me/{{ v.contato.whatsapp }}" target="_blank" rel="noopener">{{ v.contato.whatsapp_formatado }}</a></span></div>{% endfor %}
+{% if c.instagram %}<div><span>Instagram</span><span>{{ c.instagram }}</span></div>{% endif %}
+{% if c.origem %}<div><span>Como conheceu</span><span>{{ c.get_origem_display }}</span></div>{% endif %}
+<div><span>Cliente desde</span><span>{{ c.criado_em|date:"d/m/Y" }}</span></div>
+</div>
+
+{% if historico %}
+<span class="kicker">Histórico recente</span>
+<div class="lista">{% for a in historico %}<a href="{% url 'agendamento' a.pk %}"><span class="item-txt"><b>{{ a.inicio|date:"d/m/Y" }} · {{ a.inicio|time:"H:i" }}</b><span class="sub" style="font-size:13px">{{ a.get_tipo_display }} · {{ a.horas }}h</span></span>{% if a.status != 'agendado' %}<span class="pilula {% if a.status == 'falta' %}perigo{% else %}cinza{% endif %}">{{ a.get_status_display }}</span>{% endif %}</a>{% endfor %}</div>
+{% endif %}
+
+{% if c.blacklist_manual %}
+{% if user.is_admin %}<form method="post" action="{% url 'cliente_blacklist' c.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="tirar"><button class="btn" type="submit">Tirar da blacklist</button></form>{% endif %}
+{% else %}
+<details class="card fino"><summary class="btn perigo" style="list-style:none">Colocar na blacklist</summary>
+<form method="post" action="{% url 'cliente_blacklist' c.pk %}" style="display:flex;flex-direction:column;gap:10px;margin-top:12px">{% csrf_token %}
+<input type="hidden" name="acao" value="por"><label class="campo">Motivo<input type="text" name="motivo" required placeholder="Ex.: deixou a sala bagunçada"></label>
+<button class="btn perigo-cheio" type="submit">Confirmar blacklist</button></form>
+</details>
+{% endif %}
+</main>
+{% endblock %}

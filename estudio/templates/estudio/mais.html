@@ -1,0 +1,30 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Menu{% endblock %}
+{% block topo %}
+<header class="topo" style="justify-content:flex-start;gap:14px">
+<div class="av grande" style="width:52px;height:52px;font-size:20px;border-radius:16px">{{ user.get_full_name|default:user.username|slice:":1"|upper }}</div>
+<div style="display:flex;flex-direction:column;gap:4px"><span class="titulo-card" style="font-size:20px">{{ user }}</span>
+<span>{% if user.is_admin %}<span class="pilula" style="background:var(--ouro);color:#0A0A0A">Administrador</span>{% else %}<span class="pilula cinza">Edição</span>{% endif %}</span></div>
+</header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo">
+{% if user.is_admin %}
+<span class="kicker">Gestão · só administrador</span>
+<div class="lista">
+<a href="{% url 'clientes' %}?f=blacklist"><span class="av">!</span><span class="item-txt"><b>Blacklist e débitos</b><span class="sub" style="font-size:12.5px">{{ blacklist_n }} cliente{{ blacklist_n|pluralize }} · {{ debitos_n }} débito{{ debitos_n|pluralize }} em aberto ({{ debitos_t }})</span></span></a>
+<div class="item" style="opacity:.55"><span class="av">R$</span><span class="item-txt"><b>Financeiro</b><span class="sub" style="font-size:12.5px">Em breve (fase 2)</span></span></div>
+<div class="item" style="opacity:.55"><span class="av">%</span><span class="item-txt"><b>Estatísticas</b><span class="sub" style="font-size:12.5px">Em breve (fase 2)</span></span></div>
+<div class="item" style="opacity:.55"><span class="av">@</span><span class="item-txt"><b>Comunicações</b><span class="sub" style="font-size:12.5px">Em breve (fase 3)</span></span></div>
+<div class="item" style="opacity:.55"><span class="av">↺</span><span class="item-txt"><b>Backup</b><span class="sub" style="font-size:12.5px">Em breve (fase 2)</span></span></div>
+<a href="{% url 'admin:index' %}"><span class="av">⚙</span><span class="item-txt"><b>Usuários, preços e horários</b><span class="sub" style="font-size:12.5px">Painel administrativo (provisório)</span></span></a>
+</div>
+{% endif %}
+<span class="kicker">Conta</span>
+<div class="lista">
+<a href="{% url 'trocar_senha' %}"><span class="item-txt"><b>Trocar minha senha</b></span></a>
+<form method="post" action="{% url 'logout' %}" class="item" style="padding:0">{% csrf_token %}<button type="submit" style="all:unset;cursor:pointer;min-height:64px;padding:0 16px;width:100%;color:var(--perigo);font-weight:600">Sair</button></form>
+</div>
+<p class="sub centro" style="font-size:12px;margin-top:8px">Dica: no celular, use “Adicionar à tela inicial” para abrir como app.</p>
+</main>
+{% endblock %}

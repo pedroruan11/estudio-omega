@@ -1,0 +1,22 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Clientes{% endblock %}
+{% block topo %}
+<header class="topo"><h1>Clientes</h1><a class="btn ouro pequeno" style="width:auto" href="{% url 'cliente_novo' %}">+ NOVO</a></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo">
+<form method="get" style="display:flex;flex-direction:column;gap:10px">
+<input type="search" name="q" value="{{ q }}" placeholder="Buscar por banda, pessoa ou telefone" aria-label="Buscar clientes">
+<div class="segmento" style="align-self:flex-start"><a class="{% if f != 'blacklist' %}on{% endif %}" href="?q={{ q|urlencode }}">Todos</a><a class="{% if f == 'blacklist' %}on{% endif %}" href="?q={{ q|urlencode }}&f=blacklist">Blacklist</a></div>
+</form>
+{% if lista %}
+<div class="lista">
+{% for i in lista %}
+<a href="{% url 'cliente' i.c.pk %}"><span class="av">{{ i.c.inicial }}</span><span class="item-txt"><b>{{ i.c.nome }}</b><span class="sub" style="font-size:13px">{% if i.contato %}{{ i.contato.nome }} · {{ i.contato.whatsapp_formatado }}{% else %}{{ i.c.get_tipo_display }}{% endif %}</span></span>{% if i.bl %}<span class="pilula perigo">Blacklist</span>{% endif %}</a>
+{% endfor %}
+</div>
+{% else %}
+<div class="vazio">{% if q %}Nenhum cliente encontrado para “{{ q }}”.{% else %}Nenhum cliente cadastrado ainda.{% endif %}<br><br><a class="btn ouro" href="{% url 'cliente_novo' %}">Cadastrar cliente</a></div>
+{% endif %}
+</main>
+{% endblock %}

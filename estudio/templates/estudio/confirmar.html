@@ -1,0 +1,13 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'agendamento' ag.pk %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>{{ titulo }}</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo">
+<div class="card"><span class="titulo-card">{{ ag.cliente }}</span><div class="sub">{{ ag.get_tipo_display }} · {{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }}</div></div>
+<div class="{% if perigo %}erro{% else %}aviso{% endif %}">{{ texto }}</div>
+<form method="post" action="{{ acao }}">{% csrf_token %}<button class="btn {% if perigo %}perigo-cheio{% else %}ouro{% endif %}" type="submit" style="min-height:54px">{{ botao }}</button></form>
+<a class="btn" style="border:0" href="{% url 'agendamento' ag.pk %}">Voltar</a>
+</main>
+{% endblock %}

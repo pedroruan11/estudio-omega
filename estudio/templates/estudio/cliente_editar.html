@@ -1,0 +1,22 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Editar {{ c.nome }}{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'cliente' c.pk %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Editar cliente</h1></header>
+{% endblock %}
+{% block conteudo %}
+<form method="post" style="display:flex;flex-direction:column;flex:1">{% csrf_token %}
+<main class="conteudo" style="gap:16px">
+{% if form.errors %}<div class="erro">{{ form.errors }}</div>{% endif %}
+<label class="campo">Tipo<select name="tipo">{% for v, l in form.fields.tipo.choices %}<option value="{{ v }}"{% if form.tipo.value == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+<label class="campo">Nome<input type="text" name="nome" required value="{{ form.nome.value|default:'' }}"></label>
+<label class="campo">Instagram<input type="text" name="instagram" value="{{ form.instagram.value|default:'' }}" autocapitalize="none"></label>
+<label class="campo">Como nos conheceu?<select name="origem">{% for v, l in form.fields.origem.choices %}<option value="{{ v }}"{% if form.origem.value == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+{% if contato %}
+<span class="kicker" style="margin-top:8px">Contato principal</span>
+<label class="campo">Nome do contato<input type="text" name="contato_nome" value="{{ contato.nome }}"></label>
+<label class="campo">WhatsApp<input type="tel" inputmode="tel" name="contato_whatsapp" value="{{ contato.whatsapp_formatado }}"><small>Mudar aqui muda para todas as bandas desse contato.</small></label>
+{% endif %}
+</main>
+<div class="rodape-fixo"><button class="btn ouro" type="submit">SALVAR</button></div>
+</form>
+{% endblock %}

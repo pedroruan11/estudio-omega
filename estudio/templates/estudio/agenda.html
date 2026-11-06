@@ -1,0 +1,29 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Agenda{% endblock %}
+{% block topo %}
+<header class="topo" style="flex-direction:column;align-items:stretch;gap:14px">
+<div class="linha"><h1>Agenda</h1>
+<div class="segmento" role="group" aria-label="Visualização"><a class="on" href="{% url 'agenda' %}?d={{ dia|date:'Y-m-d' }}">Semana</a><a href="{% url 'agenda_mes' %}?m={{ dia|date:'Y-m' }}">Mês</a></div></div>
+<div class="linha">
+<a class="btn icone" style="border:0" href="?d={{ anterior }}" aria-label="Semana anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+<span style="font-weight:600">{{ titulo_semana }}</span>
+<a class="btn icone" style="border:0" href="?d={{ proxima }}" aria-label="Próxima semana"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+</div>
+<div class="semana">{% for s in semana %}
+<a href="?d={{ s.data|date:'Y-m-d' }}" class="{% if s.sel %}sel{% endif %}{% if s.hoje %} hoje{% endif %}"><span class="w">{{ s.curto }}</span><span class="d">{{ s.data|date:'d' }}</span><span class="o">{% if s.total %}{{ s.usadas }}/{{ s.total }}{% else %}—{% endif %}</span></a>
+{% endfor %}</div>
+</header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo">
+<div class="linha"><span class="kicker">{{ dia_nome }} {{ dia|date:"d/m" }}{% if janela_txt %} · {{ janela_txt }}{% endif %}</span>{% if total %}<span class="rotulo">{{ usadas }}h de {{ total }}h ocupadas</span>{% endif %}</div>
+{% if total %}<div class="barra-ocup" aria-hidden="true"><i style="width:{{ pct }}%"></i></div>{% endif %}
+{% for f in faixas %}
+{% if f.livre %}
+<a class="slot livre-slot" href="{% url 'agendamento_novo' %}?data={{ f.ini|date:'Y-m-d' }}&hora={{ f.ini|time:'G' }}"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt"><b>Livre</b><span style="font-size:13px">{% if f.horas < 2 %}Só gravação (ensaio exige 2h){% else %}Toque para agendar{% endif %}</span></span></a>
+{% else %}
+<a class="slot{% if f.ag.tipo == 'gravacao' %} grav{% endif %}" href="{% url 'agendamento' f.ag.pk %}"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt"><b>{{ f.ag.cliente }}</b><span class="sub" style="font-size:13px">{{ f.ag.get_tipo_display }} · {{ f.ag.horas }}h</span></span></a>
+{% endif %}
+{% empty %}<div class="vazio">A sala não funciona neste dia.</div>{% endfor %}
+</main>
+{% endblock %}

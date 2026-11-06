@@ -1,0 +1,23 @@
+{% extends "estudio/base.html" %}{% load static %}
+{% block titulo %}Início{% endblock %}
+{% block topo %}
+<header class="topo">
+<div style="display:flex;flex-direction:column;gap:4px"><span class="kicker ouro">{{ dia_curto }}</span><h1>Hoje no estúdio</h1></div>
+<img class="logo-mini" src="{% static 'estudio/img/icon-192.png' %}" alt="Omega Studios">
+</header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo">
+<div class="grade3">
+<div class="card fino"><span class="num">{{ qtd }}</span><span class="rotulo">agendamento{{ qtd|pluralize }}</span></div>
+<div class="card fino"><span class="num">{{ ocupadas }}h</span><span class="rotulo">ocupadas</span></div>
+<div class="card fino"><span class="num ouro">{{ livres }}h</span><span class="rotulo">livre{{ livres|pluralize }} hoje</span></div>
+</div>
+{% if janela_txt %}<span class="kicker">Linha do tempo · {{ janela_txt }}</span>{% endif %}
+{% include "estudio/_faixas.html" %}
+{% if amanha %}
+<span class="kicker" style="margin-top:8px">Amanhã</span>
+<div class="lista">{% for a in amanha %}<a href="{% url 'agendamento' a.pk %}"><div class="item-txt"><b>{{ a.cliente }}</b><span class="sub">{{ a.inicio|time:"H:i" }} · {{ a.get_tipo_display }} · {{ a.horas }}h</span></div><span class="pilula cinza">ver</span></a>{% endfor %}</div>
+{% endif %}
+</main>
+{% endblock %}
