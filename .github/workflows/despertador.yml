@@ -1,0 +1,18 @@
+# "Despertador": acessa o sistema a cada 10 minutos no horário de atendimento,
+# para o Render (plano gratuito) não dormir e o app abrir rápido no celular.
+# Horário de Brasília (UTC-3) 08h–01h = 11h–04h UTC. Não consulta o banco (rota /saude).
+name: Despertador
+
+on:
+  schedule:
+    - cron: "*/10 11-23 * * *"
+    - cron: "*/10 0-3 * * *"
+  workflow_dispatch:
+
+jobs:
+  acordar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Acessar /saude
+        run: curl -fsS --max-time 90 --retry 2 https://estudio-omega.onrender.com/saude
