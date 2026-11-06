@@ -281,3 +281,53 @@ def avisos_do_contato(cliente):
             vistos.add(d.pk)
             avisos.append({"contato": v.contato, "debito": d})
     return avisos
+
+
+# ---------- cobrança de multa no dia do ensaio ----------
+
+def multa_a_cobrar(cliente):
+    """Total de débitos em aberto do cliente (o que deve ser cobrado junto com o próximo ensaio)."""
+    return cliente.total_em_aberto()
+
+
+def pendencias_cobranca(agora=None):
+    """Agendamentos que já terminaram, de clientes com multa em aberto, ainda não conferidos."""
+    agora = agora or timezone.now()
+    com_debito = Debito.objects.filter(quitado_em__isnull=True).values("cliente_id")
+    return (
+        Agendamento.objects.ativos()
+        .filter(fim__lte=agora, cobranca_conferida=False, cliente_id__in=com_debito)
+        .select_related("cliente")
+        .order_by("fim")
+    )
+
+
+def confirmar_pagamento_multa(usuario, ag, agora=None):
+    """Banda pagou a multa junto com o ensaio: dá baixa em todos os débitos em aberto dela."""
+    if not usuario.is_admin:
+        raise SemPermissao("Só um administrador confirma o pagamento da multa.")
+    agora = agora or timezone.now()
+    with transaction.atomic():
+        quitados = list(ag.cliente.debitos_abertos())
+        for d in quitados:
+            d.quitado_em = agora
+            d.quitado_por = usuario
+            d.save(update_fields=["quitado_em", "quitado_por"])
+        Agendamento.objects.filter(cliente=ag.cliente, cobranca_conferida=False, fim__lte=agora).update(cobranca_conferida=True)
+    return quitados
+
+
+def multa_nao_paga(usuario, ag):
+    """A banda ensaiou mas não pagou a multa: some o aviso deste ensaio; o débito e a blacklist continuam."""
+    ag.cobranca_conferida = True
+    ag.save(update_fields=["cobranca_conferida"])
+
+
+def lancar_multa(usuario, cliente, valor, descricao):
+    if not usuario.is_admin:
+        raise SemPermissao("Só um administrador lança multas.")
+    if valor is None or valor <= 0:
+        raise RegraErro("Informe um valor maior que zero.")
+    return Debito.objects.create(
+        cliente=cliente, motivo=Debito.Motivo.AVULSO, valor=valor, descricao=descricao[:255], criado_por=usuario
+    )

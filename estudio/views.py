@@ -157,6 +157,10 @@ def _faixas_contexto(data):
         f["fim_l"] = timezone.localtime(f["fim"])
         if not f["livre"]:
             f["whats"] = link_whatsapp_lembrete(f["ag"])
+            cli = f["ag"].cliente
+            multa = cli.total_em_aberto()
+            f["bl"] = cli.blacklist_manual or multa > 0
+            f["multa"] = brl(multa) if multa > 0 else ""
     return faixas
 
 
@@ -188,6 +192,7 @@ def inicio(request):
         "livres": livres,
         "janela_txt": texto_janela(janela),
         "amanha": proximos,
+        "pendencias": regras.pendencias_cobranca().count(),
         "aba": "inicio",
     })
 
@@ -398,6 +403,12 @@ def agendamento(request, pk):
         "whats_lembrete": link_whatsapp_lembrete(ag),
         "novo": request.GET.get("novo") == "1",
         "debitos": ag.debitos.all(),
+        "bl": ag.cliente.na_blacklist,
+        "bl_motivo": ag.cliente.motivo_blacklist if ag.cliente.blacklist_manual else "",
+        "multas": ag.cliente.debitos_abertos(),
+        "multa": brl(multa) if (multa := ag.cliente.total_em_aberto()) > 0 else "",
+        "total_dia": brl(ag.valor_total + multa),
+        "agora": timezone.now(),
     })
 
 
@@ -626,3 +637,62 @@ def mais(request):
         "blacklist_n": Cliente.objects.filter(Q(blacklist_manual=True) | Q(debitos__quitado_em__isnull=True, debitos__isnull=False)).distinct().count(),
         "aba": "mais",
     })
+
+
+# ---------- cobrança de multa ----------
+
+@login_required
+def cobrancas(request):
+    itens = []
+    for ag in regras.pendencias_cobranca():
+        itens.append({
+            "ag": ag,
+            "multas": ag.cliente.debitos_abertos(),
+            "multa": brl(ag.cliente.total_em_aberto()),
+            "total": brl(ag.valor_total + ag.cliente.total_em_aberto()),
+        })
+    return render(request, "estudio/cobrancas.html", {"itens": itens, "aba": "inicio"})
+
+
+@login_required
+@require_POST
+def cobranca_pagou(request, pk):
+    ag = get_object_or_404(Agendamento.objects.select_related("cliente"), pk=pk)
+    try:
+        quitados = regras.confirmar_pagamento_multa(request.user, ag)
+    except regras.RegraErro as e:
+        messages.error(request, str(e))
+    else:
+        total = sum((d.valor for d in quitados), 0)
+        extra = "" if ag.cliente.na_blacklist else f" {ag.cliente} saiu da blacklist."
+        messages.success(request, f"Multa de {brl(total)} de {ag.cliente} marcada como paga.{extra}")
+    return redirect(request.POST.get("voltar") or "cobrancas")
+
+
+@login_required
+@require_POST
+def cobranca_nao_pagou(request, pk):
+    ag = get_object_or_404(Agendamento.objects.select_related("cliente"), pk=pk)
+    regras.multa_nao_paga(request.user, ag)
+    messages.warning(request, f"Anotado: {ag.cliente} não pagou. O débito continua em aberto e a banda segue na blacklist.")
+    return redirect(request.POST.get("voltar") or "cobrancas")
+
+
+@admin_required
+@require_POST
+def cliente_multa(request, pk):
+    from decimal import Decimal, InvalidOperation
+
+    c = get_object_or_404(Cliente, pk=pk)
+    try:
+        valor = Decimal(request.POST.get("valor", "").replace(".", "").replace(",", ".") or "0")
+    except InvalidOperation:
+        valor = None
+    descricao = request.POST.get("descricao", "").strip() or "Multa"
+    try:
+        regras.lancar_multa(request.user, c, valor, descricao)
+    except regras.RegraErro as e:
+        messages.error(request, str(e))
+    else:
+        messages.warning(request, f"Multa de {brl(valor)} lançada para {c}. Ela será cobrada no próximo ensaio.")
+    return redirect("cliente", pk=pk)

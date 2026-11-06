@@ -233,6 +233,9 @@ class Agendamento(models.Model):
     cancelado_em = models.DateTimeField(null=True, blank=True)
     cancelado_por = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     remarcacoes = models.PositiveSmallIntegerField(default=0)
+    cobranca_conferida = models.BooleanField(
+        default=False, help_text="Depois do ensaio, a equipe já confirmou se a multa foi paga ou não."
+    )
 
     objects = AgendamentoQuerySet.as_manager()
 
@@ -260,6 +263,7 @@ class Debito(models.Model):
         CANCELAMENTO = "cancelamento", "Cancelamento com menos de 48h"
         REMARCACAO = "remarcacao", "Remarcação com menos de 48h"
         FALTA = "falta", "Falta sem aviso"
+        AVULSO = "avulso", "Multa lançada manualmente"
 
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="debitos")
     agendamento = models.ForeignKey(Agendamento, on_delete=models.SET_NULL, null=True, blank=True, related_name="debitos")

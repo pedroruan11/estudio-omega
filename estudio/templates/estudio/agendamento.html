@@ -8,6 +8,28 @@
 {% if novo and whats_confirmacao %}
 <a class="btn ouro" style="min-height:54px" href="{{ whats_confirmacao }}" target="_blank" rel="noopener">AVISAR O CLIENTE NO WHATSAPP</a>
 {% endif %}
+{% if bl and ativo %}
+<div class="card perigo" style="display:flex;flex-direction:column;gap:8px" role="alert">
+<div style="display:flex;align-items:center;gap:10px"><span class="pilula perigo">Blacklist</span><b style="color:var(--perigo)">{% if multa %}Cobrar multa no dia{% else %}Banda na blacklist{% endif %}</b></div>
+{% if bl_motivo %}<span style="font-size:13.5px;color:var(--txt2)">Motivo: {{ bl_motivo }}</span>{% endif %}
+{% for d in multas %}<span style="font-size:13px;color:var(--txt2)">{{ d.get_motivo_display }}{% if d.descricao %} · {{ d.descricao }}{% endif %} · <b>R$ {{ d.valor|floatformat:2 }}</b></span>{% endfor %}
+{% if multa %}
+<div class="dados" style="border-top:1px solid var(--perigo-borda);margin-top:4px">
+<div><span>{{ ag.get_tipo_display }}</span><span>{{ valor }}</span></div>
+<div><span>Multa em aberto</span><span style="color:var(--perigo)">{{ multa }}</span></div>
+<div><span><b style="color:var(--txt)">Total a receber</b></span><span style="font-size:18px;color:var(--ouro)">{{ total_dia }}</span></div>
+</div>
+{% if ag.fim <= agora and not ag.cobranca_conferida %}
+<span class="kicker" style="margin-top:6px">O ensaio já terminou. A multa foi paga?</span>
+<div class="grade2">
+<form method="post" action="{% url 'cobranca_pagou' ag.pk %}">{% csrf_token %}<input type="hidden" name="voltar" value="{{ request.path }}"><button class="btn ouro pequeno" type="submit"{% if not user.is_admin %} disabled title="Só administrador"{% endif %}>Pagou</button></form>
+<form method="post" action="{% url 'cobranca_nao_pagou' ag.pk %}">{% csrf_token %}<input type="hidden" name="voltar" value="{{ request.path }}"><button class="btn pequeno perigo" type="submit">Não pagou</button></form>
+</div>
+{% if not user.is_admin %}<span class="sub" style="font-size:12px">Só um administrador confirma o pagamento.</span>{% endif %}
+{% endif %}
+{% endif %}
+</div>
+{% endif %}
 <div class="card" style="display:flex;flex-direction:column;gap:12px{% if ag.tipo == 'gravacao' %};border-color:var(--txt){% endif %}">
 <div class="linha"><a href="{% url 'cliente' ag.cliente.pk %}" class="titulo-card" style="color:var(--txt);text-decoration:none;font-size:20px">{{ ag.cliente }}</a>
 <span class="pilula{% if ag.status == 'cancelado' %} cinza{% elif ag.status == 'falta' %} perigo{% elif ag.tipo == 'gravacao' %} clara{% endif %}">{% if ag.status == 'agendado' %}{{ ag.get_tipo_display }}{% else %}{{ ag.get_status_display }}{% endif %}</span></div>

@@ -135,3 +135,5 @@ nav.barra>a.mais-novo{justify-self:center;width:56px;height:56px;border-radius:1
 .entrar img{width:220px;height:220px;object-fit:cover;align-self:center}
 .centro{text-align:center}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.sino{position:relative;width:44px;height:44px;border-radius:12px;background:var(--perigo-bg);color:var(--perigo);display:flex;align-items:center;justify-content:center;text-decoration:none}
+.sino-num{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:99px;background:var(--perigo);color:#0A0A0A;font:700 12px Inter,sans-serif;display:flex;align-items:center;justify-content:center}

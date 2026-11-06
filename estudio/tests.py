@@ -413,3 +413,57 @@ class BlacklistTelaTest(Base):
         self.fire.refresh_from_db()
         self.assertTrue(self.fire.na_blacklist)
         self.assertEqual(self.fire.motivo_blacklist, "Quebrou o pedal")
+
+
+class CobrancaMultaTest(Base):
+    def _com_multa(self):
+        ag = self.agendar()
+        regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=1))  # multa R$ 98
+        self.agendar(usuario=self.admin, confirmar_blacklist=True, data=SAB, hora=10)  # ensaio novo, R$ 140
+        return Agendamento.objects.get(inicio=regras.inicio_em(SAB, 10))
+
+    def test_flag_no_agendamento(self):
+        ag = self._com_multa()
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("agendamento", args=[ag.pk]))
+        self.assertContains(r, "Cobrar multa no dia")
+        self.assertContains(r, "R$ 238")  # 140 + 98
+
+    def test_pendencia_depois_do_ensaio(self):
+        ag = self._com_multa()
+        self.assertEqual(regras.pendencias_cobranca(agora=ag.inicio).count(), 0)  # ainda não terminou
+        depois = ag.fim + timedelta(minutes=5)
+        self.assertEqual(list(regras.pendencias_cobranca(agora=depois)), [ag])
+        with self.assertRaises(regras.SemPermissao):
+            regras.confirmar_pagamento_multa(self.edicao, ag, agora=depois)
+        regras.confirmar_pagamento_multa(self.admin, ag, agora=depois)
+        self.assertFalse(self.fire.na_blacklist)
+        self.assertEqual(regras.pendencias_cobranca(agora=depois).count(), 0)
+
+    def test_nao_pagou_mantem_debito(self):
+        ag = self._com_multa()
+        regras.multa_nao_paga(self.edicao, ag)
+        self.assertTrue(self.fire.na_blacklist)
+        self.assertEqual(regras.pendencias_cobranca(agora=ag.fim + timedelta(hours=1)).count(), 0)
+
+    def test_sino_na_tela_inicial(self):
+        ag = self._com_multa()
+        Agendamento.objects.filter(pk=ag.pk).update(inicio=timezone.now() - timedelta(hours=3), fim=timezone.now() - timedelta(hours=1))
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("inicio"))
+        self.assertContains(r, "Confirmar pagamento de multa")
+        r = self.client.get(reverse("cobrancas"))
+        self.assertContains(r, "Pagou a multa")
+        r = self.client.post(reverse("cobranca_pagou", args=[ag.pk]))
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(self.fire.na_blacklist)
+
+    def test_lancar_multa_manual(self):
+        self.client.force_login(self.admin)
+        r = self.client.post(reverse("cliente_multa", args=[self.fire.pk]), {"valor": "150,00", "descricao": "Quebrou o pedal"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.fire.total_em_aberto(), Decimal("150.00"))
+        self.assertTrue(self.fire.na_blacklist)
+        self.client.force_login(self.edicao)
+        r = self.client.post(reverse("cliente_multa", args=[self.fire.pk]), {"valor": "10"})
+        self.assertEqual(r.status_code, 403)

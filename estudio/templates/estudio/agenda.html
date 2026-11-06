@@ -22,7 +22,7 @@
 {% if f.livre %}
 <a class="slot livre-slot" href="{% url 'agendamento_novo' %}?data={{ f.ini|date:'Y-m-d' }}&hora={{ f.ini|time:'G' }}"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt"><b>Livre</b><span style="font-size:13px">{% if f.horas < 2 %}Só gravação (ensaio exige 2h){% else %}Toque para agendar{% endif %}</span></span></a>
 {% else %}
-<a class="slot{% if f.ag.tipo == 'gravacao' %} grav{% endif %}" href="{% url 'agendamento' f.ag.pk %}"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt"><b>{{ f.ag.cliente }}</b><span class="sub" style="font-size:13px">{{ f.ag.get_tipo_display }} · {{ f.ag.horas }}h</span></span></a>
+<a class="slot{% if f.ag.tipo == 'gravacao' %} grav{% endif %}" href="{% url 'agendamento' f.ag.pk %}"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt"><b>{{ f.ag.cliente }}</b><span class="sub" style="font-size:13px">{{ f.ag.get_tipo_display }} · {{ f.ag.horas }}h</span>{% if f.bl %}<span style="font-size:12.5px;font-weight:700;color:var(--perigo)">Blacklist{% if f.multa %} · cobrar multa {{ f.multa }}{% endif %}</span>{% endif %}</span></a>
 {% endif %}
 {% empty %}<div class="vazio">A sala não funciona neste dia.</div>{% endfor %}
 </main>

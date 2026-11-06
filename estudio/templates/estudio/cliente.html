@@ -64,6 +64,16 @@
 <div class="lista">{% for a in historico %}<a href="{% url 'agendamento' a.pk %}"><span class="item-txt"><b>{{ a.inicio|date:"d/m/Y" }} · {{ a.inicio|time:"H:i" }}</b><span class="sub" style="font-size:13px">{{ a.get_tipo_display }} · {{ a.horas }}h</span></span>{% if a.status != 'agendado' %}<span class="pilula {% if a.status == 'falta' %}perigo{% else %}cinza{% endif %}">{{ a.get_status_display }}</span>{% endif %}</a>{% endfor %}</div>
 {% endif %}
 
+{% if user.is_admin %}
+<button type="button" class="btn" id="abrir-multa" aria-expanded="false" aria-controls="form-multa">Lançar multa</button>
+<form method="post" action="{% url 'cliente_multa' c.pk %}" id="form-multa" class="card fino oculto" style="flex-direction:column;gap:10px">{% csrf_token %}
+<label class="campo">Valor da multa (R$)<input type="text" inputmode="decimal" name="valor" id="valor-multa" required placeholder="Ex.: 100,00"></label>
+<label class="campo">Descrição<input type="text" name="descricao" maxlength="255" placeholder="Ex.: quebrou o pedal de bumbo"></label>
+<span class="sub" style="font-size:12.5px">A multa fica em aberto, coloca a banda na blacklist e aparece para cobrar no próximo ensaio.</span>
+<button class="btn perigo-cheio" type="submit">Lançar multa</button>
+<button class="btn" type="button" data-fechar="form-multa" style="border:0">Cancelar</button>
+</form>
+{% endif %}
 {% if c.blacklist_manual %}
 {% if user.is_admin %}<form method="post" action="{% url 'cliente_blacklist' c.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="tirar"><button class="btn" type="submit">Tirar da blacklist</button></form>{% endif %}
 {% else %}
@@ -79,6 +89,9 @@
 {% endblock %}
 {% block js %}
 <script>
+(()=>{const b=document.getElementById('abrir-multa'),f=document.getElementById('form-multa');if(!b||!f)return;
+b.addEventListener('click',()=>{f.classList.remove('oculto');f.style.display='flex';b.classList.add('oculto');f.scrollIntoView({behavior:'smooth',block:'end'});setTimeout(()=>document.getElementById('valor-multa').focus(),300)});
+f.querySelector('[data-fechar]').addEventListener('click',()=>{f.classList.add('oculto');f.style.display='';b.classList.remove('oculto')});})();
 (()=>{const b=document.getElementById('abrir-bl'),f=document.getElementById('form-bl');if(!b||!f)return;
 b.addEventListener('click',()=>{f.classList.remove('oculto');f.style.display='flex';b.classList.add('oculto');b.setAttribute('aria-expanded','true');
 f.scrollIntoView({behavior:'smooth',block:'end'});setTimeout(()=>document.getElementById('motivo-bl').focus(),300)});

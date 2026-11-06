@@ -1,0 +1,29 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Cobranças de multa{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'inicio' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Confirmar multas</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:14px">
+<p class="sub" style="margin:0">Estas bandas tinham multa em aberto e o ensaio já terminou. A multa foi paga junto com o ensaio?</p>
+{% for i in itens %}
+<div class="card perigo" style="display:flex;flex-direction:column;gap:10px">
+<div class="linha"><a href="{% url 'cliente' i.ag.cliente.pk %}" class="titulo-card" style="color:var(--txt);text-decoration:none">{{ i.ag.cliente }}</a><span class="pilula perigo">Blacklist</span></div>
+<span class="sub" style="font-size:13px">{{ i.ag.get_tipo_display }} de {{ i.ag.inicio|date:"d/m" }} · {{ i.ag.inicio|time:"H:i" }}–{{ i.ag.fim|time:"H:i" }}</span>
+{% for d in i.multas %}<span style="font-size:13px;color:var(--txt2)">{{ d.get_motivo_display }}{% if d.descricao %} · {{ d.descricao }}{% endif %} · <b>R$ {{ d.valor|floatformat:2 }}</b></span>{% endfor %}
+<div class="dados" style="border-top:1px solid var(--perigo-borda)">
+<div><span>Multa</span><span style="color:var(--perigo)">{{ i.multa }}</span></div>
+<div><span>Total do dia (ensaio + multa)</span><span style="color:var(--ouro)">{{ i.total }}</span></div>
+</div>
+<div class="grade2">
+<form method="post" action="{% url 'cobranca_pagou' i.ag.pk %}">{% csrf_token %}<button class="btn ouro pequeno" type="submit"{% if not user.is_admin %} disabled{% endif %}>Pagou a multa</button></form>
+<form method="post" action="{% url 'cobranca_nao_pagou' i.ag.pk %}">{% csrf_token %}<button class="btn pequeno perigo" type="submit">Não pagou</button></form>
+</div>
+{% if not user.is_admin %}<span class="sub" style="font-size:12px">Só um administrador confirma o pagamento.</span>{% endif %}
+</div>
+{% empty %}
+<div class="vazio">Nenhuma multa para confirmar. Tudo em dia!</div>
+{% endfor %}
+<p class="sub" style="margin:0;font-size:12px">"Pagou" dá baixa na multa e tira a banda da blacklist (se não houver motivo manual). "Não pagou" só some com o aviso deste ensaio; a multa continua em aberto.</p>
+</main>
+{% endblock %}
