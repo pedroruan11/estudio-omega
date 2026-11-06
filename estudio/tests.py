@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from . import regras
 from .models import Agendamento, Cliente, Contato, Debito, HorarioFuncionamento, Usuario, Vinculo
@@ -390,8 +391,13 @@ class BackupTest(Base):
         with self.assertRaises(Exception):
             bkp.ler_arquivo_enviado(BytesIO(b'[{"model":"outra.coisa"}]'))
 
-    def test_automatico_uma_vez_por_dia(self):
+    def test_automatico_uma_vez_por_mes(self):
         self.client.force_login(self.edicao)
         self.client.get(reverse("inicio"))
         self.client.get(reverse("inicio"))
         self.assertEqual(Backup.objects.filter(tipo=Backup.Tipo.AUTOMATICO).count(), 1)
+        # um backup do mês passado não conta: gera o deste mês
+        b = Backup.objects.get(tipo=Backup.Tipo.AUTOMATICO)
+        Backup.objects.filter(pk=b.pk).update(criado_em=timezone.now() - timedelta(days=40))
+        self.client.get(reverse("inicio"))
+        self.assertEqual(Backup.objects.filter(tipo=Backup.Tipo.AUTOMATICO).count(), 2)

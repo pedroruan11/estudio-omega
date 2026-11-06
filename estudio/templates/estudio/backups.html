@@ -9,7 +9,7 @@
 <span class="kicker">Último backup</span>
 {% if ultimo %}<span class="titulo-card">{{ ultimo.criado_em|date:"d/m/Y \à\s H:i" }}</span><span class="rotulo">{{ ultimo.get_tipo_display }} · {{ ultimo.registros }} registros</span>
 {% else %}<span class="sub">Nenhum backup ainda.</span>{% endif %}
-<span class="rotulo">Automático: 1 por dia, no primeiro acesso do dia. Guardamos os últimos 30.</span>
+<span class="rotulo">Automático: 1 por mês, no primeiro acesso do mês. Guardamos os últimos 12 automáticos e 30 manuais.</span>
 </div>
 {% if drive %}
 <div class="msg success">Google Drive conectado: cada backup também vai para a pasta Omega Studio/Backups.</div>

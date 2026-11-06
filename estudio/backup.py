@@ -3,7 +3,7 @@
 - Cada backup é um JSON (dumpdata do app 'estudio') compactado em gzip, guardado no próprio banco.
 - Se DRIVE_BACKUP_URL e DRIVE_BACKUP_SEGREDO estiverem configurados no Render, uma cópia vai
   para a pasta "Omega Studio/Backups" do Google Drive, por meio de um pequeno Apps Script do Pedro.
-- Backup automático: no máximo um por dia, disparado pelo primeiro acesso ao sistema no dia.
+- Backup automático: um por mês, disparado pelo primeiro acesso ao sistema no mês.
 """
 import base64
 import gzip
@@ -14,7 +14,7 @@ import os
 import tempfile
 import threading
 import urllib.request
-from datetime import timedelta
+from datetime import datetime, time
 
 from django.core.management import call_command
 from django.core.management.color import no_style
@@ -36,7 +36,7 @@ from .models import (
 
 log = logging.getLogger(__name__)
 
-MANTER_AUTOMATICOS = 30
+MANTER_AUTOMATICOS = 12  # um ano de backups mensais
 MANTER_MANUAIS = 30
 # Ordem para apagar antes de restaurar (dependentes primeiro).
 MODELOS_RESTAURACAO = [Debito, Agendamento, Anotacao, Vinculo, Cliente, Contato, HorarioFuncionamento, Configuracao, Usuario]
@@ -136,15 +136,20 @@ def restaurar(texto_json, usuario):
         os.unlink(caminho)
 
 
+def _ja_tem_automatico_no_mes():
+    hoje = timezone.localdate()
+    inicio_mes = timezone.make_aware(datetime.combine(hoje.replace(day=1), time.min))
+    return Backup.objects.filter(tipo=Backup.Tipo.AUTOMATICO, criado_em__gte=inicio_mes).exists()
+
+
 def backup_automatico_se_preciso():
-    """Chamado nas telas; faz no máximo um backup automático por dia, em segundo plano."""
-    limite = timezone.now() - timedelta(hours=20)
-    if Backup.objects.filter(tipo=Backup.Tipo.AUTOMATICO, criado_em__gte=limite).exists():
+    """Chamado na tela inicial; faz no máximo um backup automático por mês, em segundo plano."""
+    if _ja_tem_automatico_no_mes():
         return False
 
     def _rodar():
         try:
-            if not Backup.objects.filter(tipo=Backup.Tipo.AUTOMATICO, criado_em__gte=limite).exists():
+            if not _ja_tem_automatico_no_mes():
                 gerar(None, tipo=Backup.Tipo.AUTOMATICO)
         except Exception:
             log.exception("Falha no backup automático")
