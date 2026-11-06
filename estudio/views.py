@@ -19,6 +19,7 @@ from . import regras
 from .forms import AgendamentoForm, ClienteEditarForm, ClienteForm, PrimeiroAcessoForm, RemarcarForm
 from .models import (
     Agendamento,
+    Backup,
     Anotacao,
     Cliente,
     Configuracao,
@@ -82,8 +83,8 @@ def manifest(request):
         "short_name": "Omega",
         "start_url": "/",
         "display": "standalone",
-        "background_color": "#0A0A0A",
-        "theme_color": "#0A0A0A",
+        "background_color": "#000000",
+        "theme_color": "#000000",
         "lang": "pt-BR",
         "icons": [
             {"src": static("estudio/img/icon-192.png"), "sizes": "192x192", "type": "image/png"},
@@ -161,6 +162,12 @@ def _faixas_contexto(data):
 
 @login_required
 def inicio(request):
+    from .backup import backup_automatico_se_preciso
+
+    try:
+        backup_automatico_se_preciso()
+    except Exception:  # backup nunca pode derrubar a tela inicial
+        pass
     hoje = timezone.localdate()
     faixas = _faixas_contexto(hoje)
     ocupadas = sum(f["horas"] for f in faixas if not f["livre"])
@@ -615,6 +622,7 @@ def mais(request):
     return render(request, "estudio/mais.html", {
         "debitos_n": abertos["n"],
         "debitos_t": brl(abertos["t"] or 0),
+        "ultimo_backup": Backup.objects.defer("conteudo").first() if request.user.is_admin else None,
         "blacklist_n": Cliente.objects.filter(Q(blacklist_manual=True) | Q(debitos__quitado_em__isnull=True, debitos__isnull=False)).distinct().count(),
         "aba": "mais",
     })

@@ -1,0 +1,53 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Financeiro{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'mais' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Financeiro</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:18px">
+<div class="card{% if abertos %} perigo{% endif %}" style="display:flex;flex-direction:column;gap:4px">
+<span class="kicker">Débitos em aberto</span>
+<span class="num" style="{% if abertos %}color:var(--perigo){% endif %}">{{ total_aberto }}</span>
+<span class="rotulo">{{ abertos|length }} débito{{ abertos|length|pluralize }}</span>
+</div>
+{% if abertos %}
+<div class="lista">
+{% for d in abertos %}
+<div class="item" style="flex-direction:column;align-items:stretch;gap:8px;padding:12px 16px">
+<div class="linha"><a href="{% url 'cliente' d.cliente.pk %}" style="color:var(--txt);font-weight:700;text-decoration:none">{{ d.cliente }}</a><span style="font-weight:700;color:var(--perigo)">R$ {{ d.valor|floatformat:2 }}</span></div>
+<span class="sub" style="font-size:13px">{{ d.get_motivo_display }} · {{ d.descricao }}</span>
+<form method="post" action="{% url 'financeiro_quitar' d.pk %}">{% csrf_token %}<button class="btn pequeno" type="submit">Marcar como pago</button></form>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+<form method="post" style="display:flex;flex-direction:column;gap:14px">{% csrf_token %}
+<span class="kicker" style="margin-top:6px">Preços por hora</span>
+{% if form.errors %}<div class="erro">{% for f in form %}{% for e in f.errors %}{{ f.label }}: {{ e }}<br>{% endfor %}{% endfor %}</div>{% endif %}
+<div class="grade2">
+<label class="campo">Ensaio (R$/h)<input type="text" inputmode="decimal" name="preco_ensaio" value="{{ form.preco_ensaio.value|floatformat:2 }}" required></label>
+<label class="campo">Gravação (R$/h)<input type="text" inputmode="decimal" name="preco_gravacao" value="{{ form.preco_gravacao.value|floatformat:2 }}" required></label>
+</div>
+<span class="kicker" style="margin-top:6px">Cancelamento, remarcação e falta</span>
+<label class="campo">Sem custo até (horas antes)<input type="text" inputmode="numeric" name="antecedencia_horas" value="{{ form.antecedencia_horas.value }}" required></label>
+<div class="grade2">
+<label class="campo">Taxa ensaio (%)<input type="text" inputmode="numeric" name="taxa_ensaio_pct" value="{{ form.taxa_ensaio_pct.value }}" required></label>
+<label class="campo">Taxa gravação (%)<input type="text" inputmode="numeric" name="taxa_gravacao_pct" value="{{ form.taxa_gravacao_pct.value }}" required></label>
+</div>
+<span class="kicker" style="margin-top:6px">Duração</span>
+<div class="grade3">
+<label class="campo">Mín. ensaio<input type="text" inputmode="numeric" name="min_horas_ensaio" value="{{ form.min_horas_ensaio.value }}" required></label>
+<label class="campo">Mín. gravação<input type="text" inputmode="numeric" name="min_horas_gravacao" value="{{ form.min_horas_gravacao.value }}" required></label>
+<label class="campo">Máximo<input type="text" inputmode="numeric" name="max_horas" value="{{ form.max_horas.value }}" required></label>
+</div>
+<p class="sub" style="margin:0;font-size:12.5px">Mudanças de preço valem para os próximos agendamentos. Os já marcados mantêm o valor de quando foram agendados.</p>
+<button class="btn ouro" type="submit">SALVAR VALORES</button>
+</form>
+
+{% if quitados %}
+<span class="kicker" style="margin-top:6px">Últimos débitos pagos</span>
+<div class="lista">{% for d in quitados %}<div class="item"><span class="item-txt"><b>{{ d.cliente }}</b><span class="sub" style="font-size:12.5px">{{ d.get_motivo_display }} · pago em {{ d.quitado_em|date:"d/m/Y" }}{% if d.quitado_por %} · baixa por {{ d.quitado_por }}{% endif %}</span></span><span style="font-weight:700">R$ {{ d.valor|floatformat:2 }}</span></div>{% endfor %}</div>
+{% endif %}
+</main>
+{% endblock %}

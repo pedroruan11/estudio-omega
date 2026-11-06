@@ -242,3 +242,156 @@ class TelasTest(Base):
         self.assertEqual(r.status_code, 302)
         self.assertEqual(self.leandro.clientes.count(), 2)
         self.assertEqual(Contato.objects.count(), 1)
+
+
+# ---------------- fase 2 ----------------
+from . import backup as bkp  # noqa: E402
+from .models import Backup, Configuracao  # noqa: E402
+
+bkp.EM_SEGUNDO_PLANO = False
+
+
+class GestaoAcessoTest(Base):
+    PAGINAS = ["financeiro", "estatisticas", "configuracoes", "backups", "usuario_novo", "backup_restaurar_arquivo"]
+
+    def test_admin_abre_tudo(self):
+        self.client.force_login(self.admin)
+        self.agendar()
+        for nome in self.PAGINAS:
+            r = self.client.get(reverse(nome))
+            self.assertEqual(r.status_code, 200, nome)
+        r = self.client.get(reverse("usuario_editar", args=[self.edicao.pk]))
+        self.assertEqual(r.status_code, 200)
+        r = self.client.get(reverse("estatisticas") + "?m=2030-01")
+        self.assertContains(r, "FIRE")
+
+    def test_edicao_barrado(self):
+        self.client.force_login(self.edicao)
+        for nome in self.PAGINAS:
+            r = self.client.get(reverse(nome))
+            self.assertEqual(r.status_code, 403, nome)
+
+
+class FinanceiroTest(Base):
+    def test_salvar_precos_com_virgula(self):
+        self.client.force_login(self.admin)
+        r = self.client.post(reverse("financeiro"), {
+            "preco_ensaio": "80,00", "preco_gravacao": "450", "taxa_ensaio_pct": "70", "taxa_gravacao_pct": "50",
+            "antecedencia_horas": "48", "min_horas_ensaio": "2", "min_horas_gravacao": "1", "max_horas": "6",
+        })
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Configuracao.atual().preco_ensaio, Decimal("80"))
+        ag = self.agendar(data=SAB, hora=10)
+        self.assertEqual(ag.valor_total, Decimal("160"))
+
+    def test_preco_antigo_mantido(self):
+        ag = self.agendar()
+        cfg = Configuracao.atual()
+        cfg.preco_ensaio = Decimal("100")
+        cfg.save()
+        ag.refresh_from_db()
+        self.assertEqual(ag.valor_total, Decimal("140"))
+
+    def test_quitar_pela_tela(self):
+        ag = self.agendar()
+        d = regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=1))
+        self.client.force_login(self.admin)
+        self.client.post(reverse("financeiro_quitar", args=[d.pk]))
+        self.assertFalse(self.fire.na_blacklist)
+
+
+class ConfiguracoesTest(Base):
+    def test_mudar_horario(self):
+        self.client.force_login(self.admin)
+        dados = {"h-TOTAL_FORMS": "7", "h-INITIAL_FORMS": "7", "h-MIN_NUM_FORMS": "0", "h-MAX_NUM_FORMS": "1000"}
+        for i, h in enumerate(HorarioFuncionamento.objects.order_by("dia_semana")):
+            dados.update({f"h-{i}-id": h.pk, f"h-{i}-abre": h.abre, f"h-{i}-fecha": h.fecha})
+            if h.aberto:
+                dados[f"h-{i}-aberto"] = "on"
+        dados["h-0-abre"] = "17"  # segunda abre 17h
+        dados.pop("h-6-aberto")  # domingo fechado
+        r = self.client.post(reverse("configuracoes"), dados)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(HorarioFuncionamento.do_dia(SEG), (17, 24))
+        self.assertIsNone(HorarioFuncionamento.do_dia(date(2030, 1, 13)))
+
+    def test_horario_invalido(self):
+        self.client.force_login(self.admin)
+        dados = {"h-TOTAL_FORMS": "7", "h-INITIAL_FORMS": "7", "h-MIN_NUM_FORMS": "0", "h-MAX_NUM_FORMS": "1000"}
+        for i, h in enumerate(HorarioFuncionamento.objects.order_by("dia_semana")):
+            dados.update({f"h-{i}-id": h.pk, f"h-{i}-abre": h.abre, f"h-{i}-fecha": h.fecha, f"h-{i}-aberto": "on"})
+        dados["h-0-abre"] = "23"
+        dados["h-0-fecha"] = "20"
+        r = self.client.post(reverse("configuracoes"), dados)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(HorarioFuncionamento.do_dia(SEG), (18, 24))
+
+    def test_criar_usuario(self):
+        self.client.force_login(self.admin)
+        r = self.client.post(reverse("usuario_novo"), {
+            "first_name": "Fabio", "username": "fabio2", "perfil": "edicao", "password1": "Tr0caDepois!!", "password2": "Tr0caDepois!!",
+        })
+        self.assertEqual(r.status_code, 302)
+        u = Usuario.objects.get(username="fabio2")
+        self.assertFalse(u.is_admin)
+        self.assertTrue(self.client.login(username="fabio2", password="Tr0caDepois!!"))
+
+    def test_nao_remove_ultimo_admin(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse("usuario_editar", args=[self.admin.pk]), {"first_name": "P", "perfil": "edicao", "is_active": "on"})
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_admin)
+
+    def test_redefinir_senha(self):
+        self.client.force_login(self.admin)
+        r = self.client.post(reverse("usuario_senha", args=[self.edicao.pk]), {"new_password1": "NovaSenha#2026", "new_password2": "NovaSenha#2026"})
+        self.assertEqual(r.status_code, 302)
+        self.edicao.refresh_from_db()
+        self.assertTrue(self.edicao.check_password("NovaSenha#2026"))
+
+
+class BackupTest(Base):
+    def test_gerar_e_restaurar(self):
+        ag = self.agendar()
+        b = bkp.gerar(self.admin)
+        self.assertGreater(b.registros, 5)
+        self.assertEqual(b.drive_status, "desligado")
+        # depois do backup, muda tudo
+        Cliente.objects.create(nome="Banda Depois")
+        regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=72))
+        bkp.restaurar(bkp.conteudo_json(b), self.admin)
+        self.assertFalse(Cliente.objects.filter(nome="Banda Depois").exists())
+        ag.refresh_from_db()
+        self.assertEqual(ag.status, Agendamento.Status.AGENDADO)
+        self.assertTrue(Backup.objects.filter(tipo=Backup.Tipo.ANTES_RESTAURAR).exists())
+        # sequências continuam funcionando depois de restaurar
+        novo = Cliente.objects.create(nome="Nova")
+        self.assertGreater(novo.pk, self.fire.pk)
+
+    def test_restaurar_pela_tela_exige_frase(self):
+        self.agendar()
+        b = bkp.gerar(self.admin)
+        self.client.force_login(self.admin)
+        r = self.client.post(reverse("backup_restaurar", args=[b.pk]), {"frase": "sim"})
+        self.assertContains(r, "digite RESTAURAR")
+        r = self.client.post(reverse("backup_restaurar", args=[b.pk]), {"frase": "restaurar"})
+        self.assertEqual(r.status_code, 302)
+
+    def test_baixar(self):
+        b = bkp.gerar(self.admin)
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("backup_baixar", args=[b.pk]))
+        self.assertEqual(r["Content-Type"], "application/gzip")
+        self.assertEqual(bytes(r.content)[:2], b"\x1f\x8b")
+
+    def test_arquivo_invalido(self):
+        from io import BytesIO
+
+        with self.assertRaises(Exception):
+            bkp.ler_arquivo_enviado(BytesIO(b'[{"model":"outra.coisa"}]'))
+
+    def test_automatico_uma_vez_por_dia(self):
+        self.client.force_login(self.edicao)
+        self.client.get(reverse("inicio"))
+        self.client.get(reverse("inicio"))
+        self.assertEqual(Backup.objects.filter(tipo=Backup.Tipo.AUTOMATICO).count(), 1)

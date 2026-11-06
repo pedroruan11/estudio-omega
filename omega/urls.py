@@ -3,6 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from estudio import views as v
+from estudio import views_gestao as g
 
 urlpatterns = [
     path("", v.inicio, name="inicio"),
@@ -30,5 +31,19 @@ urlpatterns = [
     path("clientes/<int:pk>/blacklist/", v.cliente_blacklist, name="cliente_blacklist"),
     path("debitos/<int:pk>/quitar/", v.debito_quitar, name="debito_quitar"),
     path("mais/", v.mais, name="mais"),
+    path("financeiro/", g.financeiro, name="financeiro"),
+    path("financeiro/debitos/<int:pk>/quitar/", g.financeiro_quitar, name="financeiro_quitar"),
+    path("estatisticas/", g.estatisticas, name="estatisticas"),
+    path("configuracoes/", g.configuracoes, name="configuracoes"),
+    path("configuracoes/usuarios/novo/", g.usuario_novo, name="usuario_novo"),
+    path("configuracoes/usuarios/<int:pk>/", g.usuario_editar, name="usuario_editar"),
+    path("configuracoes/usuarios/<int:pk>/senha/", g.usuario_senha, name="usuario_senha"),
+    path("backup/", g.backups, name="backups"),
+    path("backup/gerar/", g.backup_gerar, name="backup_gerar"),
+    path("backup/restaurar/", g.backup_restaurar, name="backup_restaurar_arquivo"),
+    path("backup/<int:pk>/baixar/", g.backup_baixar, name="backup_baixar"),
+    path("backup/<int:pk>/drive/", g.backup_drive, name="backup_drive"),
+    path("backup/<int:pk>/excluir/", g.backup_excluir, name="backup_excluir"),
+    path("backup/<int:pk>/restaurar/", g.backup_restaurar, name="backup_restaurar"),
     path("admin/", admin.site.urls),
 ]

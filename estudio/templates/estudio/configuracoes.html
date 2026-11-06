@@ -1,0 +1,39 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Configurações{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'mais' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Configurações</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:16px">
+<div class="linha"><span class="kicker">Usuários</span><a class="btn ouro pequeno" style="width:auto" href="{% url 'usuario_novo' %}">+ NOVO</a></div>
+<div class="lista">
+{% for u in usuarios %}
+<a href="{% url 'usuario_editar' u.pk %}"{% if not u.is_active %} style="opacity:.5"{% endif %}>
+<span class="av">{{ u.get_full_name|default:u.username|slice:":1"|upper }}</span>
+<span class="item-txt"><b>{{ u.get_full_name|default:u.username }}</b><span class="sub" style="font-size:12.5px">{{ u.username }}{% if u.last_login %} · último acesso {{ u.last_login|date:"d/m H:i" }}{% else %} · nunca entrou{% endif %}</span></span>
+{% if not u.is_active %}<span class="pilula cinza">Inativo</span>{% elif u.is_admin %}<span class="pilula">Admin</span>{% else %}<span class="pilula cinza">Edição</span>{% endif %}
+</a>
+{% endfor %}
+</div>
+
+<form method="post" style="display:flex;flex-direction:column;gap:12px">{% csrf_token %}
+{{ formset.management_form }}
+<span class="kicker" style="margin-top:8px">Horário da sala</span>
+{% if formset.errors %}<div class="erro">Confira os horários: {% for f in formset %}{% for e in f.non_field_errors %}{{ e }} {% endfor %}{% for fld in f %}{% for e in fld.errors %}{{ f.instance.get_dia_semana_display }}: {{ e }} {% endfor %}{% endfor %}{% endfor %}</div>{% endif %}
+<div class="lista">
+{% for f in formset %}
+<div class="item" style="gap:10px">
+{{ f.id }}
+<label class="check" style="width:112px;flex-shrink:0"><input type="checkbox" name="{{ f.prefix }}-aberto"{% if f.aberto.value %} checked{% endif %}> {{ f.instance.get_dia_semana_display }}</label>
+<input type="text" inputmode="numeric" name="{{ f.prefix }}-abre" value="{{ f.abre.value }}" aria-label="{{ f.instance.get_dia_semana_display }}: abre (hora)" style="min-height:44px;text-align:center">
+<span class="rotulo">até</span>
+<input type="text" inputmode="numeric" name="{{ f.prefix }}-fecha" value="{{ f.fecha.value }}" aria-label="{{ f.instance.get_dia_semana_display }}: fecha (hora)" style="min-height:44px;text-align:center">
+</div>
+{% endfor %}
+</div>
+<p class="sub" style="margin:0;font-size:12.5px">Horas cheias. Use 24 para meia-noite. Desmarque o dia para fechar a sala. Agendamentos já feitos não mudam.</p>
+<button class="btn ouro" type="submit">SALVAR HORÁRIOS</button>
+</form>
+<a class="btn" href="{% url 'admin:index' %}" style="margin-top:8px">Painel avançado (Django)</a>
+</main>
+{% endblock %}

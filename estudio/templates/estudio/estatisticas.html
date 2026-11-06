@@ -1,0 +1,72 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Estatísticas{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'mais' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Estatísticas</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:16px">
+<div class="linha">
+<a class="btn icone" style="border:0" href="?m={{ anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+<span style="font-weight:700;font-size:17px">{{ titulo }}</span>
+<a class="btn icone" style="border:0" href="?m={{ proxima }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+</div>
+
+<div class="card" style="display:flex;flex-direction:column;gap:6px">
+<span class="kicker">Valor estimado do mês</span>
+<span class="num ouro" style="font-size:30px">{{ valor }}</span>
+<span class="rotulo">Ensaios {{ valor_ensaio }} · Gravações {{ valor_grav }} · sem contar taxas</span>
+</div>
+
+<div class="grade3">
+<div class="card fino"><span class="num">{{ qtd_ensaios }}</span><span class="rotulo">ensaios</span></div>
+<div class="card fino"><span class="num">{{ qtd_gravacoes }}</span><span class="rotulo">gravações</span></div>
+<div class="card fino"><span class="num">{{ horas }}h</span><span class="rotulo">de sala usadas</span></div>
+</div>
+
+<div class="card" style="display:flex;flex-direction:column;gap:10px">
+<div class="linha"><span class="kicker">Ocupação da sala</span><span style="font-weight:700">{{ ocupacao }}%</span></div>
+<div class="barra-ocup" aria-hidden="true"><i style="width:{{ ocupacao }}%"></i></div>
+<span class="rotulo">{{ horas }}h de {{ disponiveis }}h disponíveis no mês</span>
+</div>
+
+<div class="card" style="display:flex;flex-direction:column;gap:10px">
+<span class="kicker">Horas por dia da semana</span>
+{% for d in dias_semana %}
+<div style="display:grid;grid-template-columns:40px 1fr 44px;align-items:center;gap:10px">
+<span class="rotulo">{{ d.nome }}</span>
+<div class="barra-ocup" style="height:12px"><i style="width:{{ d.pct }}%"></i></div>
+<span style="font-size:13px;font-weight:600;text-align:right">{{ d.horas }}h</span>
+</div>
+{% endfor %}
+</div>
+
+<div class="card" style="display:flex;flex-direction:column;gap:10px">
+<span class="kicker">Ranking · quem mais usou a sala</span>
+{% for r in ranking %}
+<a href="{% url 'cliente' r.cliente__id %}" style="text-decoration:none;color:var(--txt);display:flex;flex-direction:column;gap:6px">
+<div class="linha"><span style="font-weight:600">{{ forloop.counter }}. {{ r.cliente__nome }}</span><span class="rotulo">{{ r.horas }}h · {{ r.qtd }} vez{{ r.qtd|pluralize:"es" }}</span></div>
+<div class="barra-ocup" style="height:6px"><i style="width:{{ r.pct }}%"></i></div>
+</a>
+{% empty %}<span class="sub">Nenhum agendamento neste mês.</span>{% endfor %}
+</div>
+
+<div class="grade2">
+<div class="card fino"><span class="num">{{ cancelados }}</span><span class="rotulo">cancelamentos</span></div>
+<div class="card fino"><span class="num" style="{% if faltas %}color:var(--perigo){% endif %}">{{ faltas }}</span><span class="rotulo">faltas</span></div>
+<div class="card fino"><span class="num" style="font-size:18px">{{ taxas_geradas }}</span><span class="rotulo">taxas geradas</span></div>
+<div class="card fino"><span class="num" style="font-size:18px">{{ taxas_recebidas }}</span><span class="rotulo">taxas recebidas</span></div>
+</div>
+
+<div class="card" style="display:flex;flex-direction:column;gap:10px">
+<div class="linha"><span class="kicker">Como os clientes nos conheceram</span><span class="rotulo">{{ novos }} novo{{ novos|pluralize }} no mês</span></div>
+{% for o in origens %}
+<div style="display:grid;grid-template-columns:110px 1fr 36px;align-items:center;gap:10px">
+<span style="font-size:13px">{{ o.nome }}</span>
+<div class="barra-ocup" style="height:10px"><i style="width:{{ o.pct }}%"></i></div>
+<span style="font-size:13px;font-weight:600;text-align:right">{{ o.n }}</span>
+</div>
+{% empty %}<span class="sub">Ainda sem dados (é preenchido no cadastro do cliente).</span>{% endfor %}
+</div>
+<p class="sub" style="margin:0;font-size:12px">Valor estimado = agendamentos não cancelados do mês (realizados e futuros) × preço da hora na época do agendamento. Como o pagamento é feito no estúdio, o sistema não confirma o recebimento.</p>
+</main>
+{% endblock %}

@@ -278,3 +278,26 @@ class Debito(models.Model):
     @property
     def aberto(self):
         return self.quitado_em is None
+
+
+class Backup(models.Model):
+    class Tipo(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        AUTOMATICO = "automatico", "Automático"
+        ANTES_RESTAURAR = "antes", "Antes de restaurar"
+
+    tipo = models.CharField(max_length=12, choices=Tipo.choices, default=Tipo.MANUAL)
+    criado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+    criado_por = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    tamanho = models.PositiveIntegerField(default=0, help_text="bytes (compactado)")
+    registros = models.PositiveIntegerField(default=0)
+    conteudo = models.BinaryField(help_text="JSON compactado (gzip)")
+    drive_status = models.CharField(max_length=20, default="", blank=True)
+    drive_detalhe = models.CharField(max_length=255, default="", blank=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+
+    @property
+    def nome_arquivo(self):
+        return f"omega-backup-{timezone.localtime(self.criado_em):%Y-%m-%d_%H%M}.json.gz"

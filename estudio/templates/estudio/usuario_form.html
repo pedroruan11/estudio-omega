@@ -1,0 +1,37 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}{% if novo %}Novo usuário{% else %}{{ u.username }}{% endif %}{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'configuracoes' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>{% if novo %}Novo usuário{% else %}{{ u.get_full_name|default:u.username }}{% endif %}</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:16px">
+<form method="post" action="{% if novo %}{% url 'usuario_novo' %}{% else %}{% url 'usuario_editar' u.pk %}{% endif %}" style="display:flex;flex-direction:column;gap:14px">{% csrf_token %}
+{% if form.errors %}<div class="erro" role="alert">{% for f in form %}{% for e in f.errors %}{{ e }}<br>{% endfor %}{% endfor %}{{ form.non_field_errors }}</div>{% endif %}
+<label class="campo">Nome<input type="text" name="first_name" value="{{ form.first_name.value|default:'' }}" required></label>
+{% if novo %}<label class="campo">Usuário (para entrar)<input type="text" name="username" autocapitalize="none" value="{{ form.username.value|default:'' }}" required><small>Sem espaços. Ex.: fabio</small></label>{% endif %}
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Perfil</legend>
+<div class="grade2">
+<label class="chip"><input type="radio" name="perfil" value="admin"{% if form.perfil.value == 'admin' %} checked{% endif %}><span>Administrador</span></label>
+<label class="chip"><input type="radio" name="perfil" value="edicao"{% if form.perfil.value != 'admin' %} checked{% endif %}><span>Edição</span></label>
+</div>
+<small>Administrador: sócios, acesso total. Edição: colaboradores, só agenda e clientes.</small>
+</fieldset>
+{% if novo %}
+<label class="campo">Senha provisória<input type="password" name="password1" autocomplete="new-password" required><small>Mínimo de 8 caracteres. A pessoa troca depois em Mais → Trocar minha senha.</small></label>
+<label class="campo">Repita a senha<input type="password" name="password2" autocomplete="new-password" required></label>
+{% else %}
+<label class="check"><input type="checkbox" name="is_active"{% if form.is_active.value %} checked{% endif %}> Ativo (pode entrar no sistema)</label>
+{% endif %}
+<button class="btn ouro" type="submit">{% if novo %}CRIAR USUÁRIO{% else %}SALVAR{% endif %}</button>
+</form>
+{% if not novo %}
+<form method="post" action="{% url 'usuario_senha' u.pk %}" style="display:flex;flex-direction:column;gap:12px;margin-top:10px">{% csrf_token %}
+<span class="kicker">Redefinir senha</span>
+{% if senha_form.errors %}<div class="erro">{% for f in senha_form %}{% for e in f.errors %}{{ e }}<br>{% endfor %}{% endfor %}</div>{% endif %}
+<label class="campo">Nova senha<input type="password" name="new_password1" autocomplete="new-password" required></label>
+<label class="campo">Repita a nova senha<input type="password" name="new_password2" autocomplete="new-password" required></label>
+<button class="btn" type="submit">Redefinir senha</button>
+</form>
+{% endif %}
+</main>
+{% endblock %}

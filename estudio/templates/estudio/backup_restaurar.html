@@ -1,0 +1,22 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Restaurar backup{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'backups' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Restaurar backup</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:16px">
+<div class="erro" style="display:flex;flex-direction:column;gap:6px">
+<b>Atenção: isso substitui TODOS os dados atuais</b>
+<span>Clientes, agendamentos, débitos, usuários e configurações voltam a ser exatamente como estavam no backup. O que foi feito depois dele some.</span>
+<span>Antes de restaurar, o sistema guarda automaticamente um backup de segurança do estado atual.</span>
+</div>
+{% if b %}<div class="card fino"><b>Backup de {{ b.criado_em|date:"d/m/Y H:i" }}</b><div class="sub">{{ b.get_tipo_display }} · {{ b.registros }} registros</div></div>{% endif %}
+{% if erro %}<div class="erro" role="alert">{{ erro }}</div>{% endif %}
+<form method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:14px">{% csrf_token %}
+{% if not b %}<label class="campo">Arquivo de backup (.json.gz ou .json)<input type="file" name="arquivo" accept=".gz,.json,application/gzip,application/json" required style="min-height:52px;padding:12px;border-radius:14px;border:1px solid var(--linha);background:var(--s1);color:var(--txt)"></label>{% endif %}
+<label class="campo">Para confirmar, digite {{ frase }}<input type="text" name="frase" autocomplete="off" autocapitalize="characters" required></label>
+<button class="btn perigo-cheio" type="submit" style="min-height:54px">RESTAURAR E SUBSTITUIR OS DADOS</button>
+</form>
+<a class="btn" style="border:0" href="{% url 'backups' %}">Cancelar</a>
+</main>
+{% endblock %}

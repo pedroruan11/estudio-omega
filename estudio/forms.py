@@ -59,3 +59,68 @@ class RemarcarForm(forms.Form):
     data = forms.DateField()
     hora = forms.IntegerField(min_value=0, max_value=23)
     horas = forms.IntegerField(min_value=1, max_value=12)
+
+
+# ---------- fase 2 ----------
+from django.contrib.auth.forms import SetPasswordForm  # noqa: E402
+from django.forms import modelformset_factory  # noqa: E402
+
+from .models import Configuracao, HorarioFuncionamento  # noqa: E402
+
+
+class FinanceiroForm(forms.ModelForm):
+    class Meta:
+        model = Configuracao
+        fields = ("preco_ensaio", "preco_gravacao", "taxa_ensaio_pct", "taxa_gravacao_pct", "antecedencia_horas",
+                  "min_horas_ensaio", "min_horas_gravacao", "max_horas")
+        localized_fields = ("preco_ensaio", "preco_gravacao")  # aceita "70,00"
+
+    def clean(self):
+        d = super().clean()
+        for campo in ("taxa_ensaio_pct", "taxa_gravacao_pct"):
+            if d.get(campo) is not None and d[campo] > 100:
+                self.add_error(campo, "Máximo de 100%.")
+        if d.get("max_horas") and d.get("min_horas_ensaio") and d["min_horas_ensaio"] > d["max_horas"]:
+            self.add_error("min_horas_ensaio", "O mínimo não pode passar do máximo.")
+        if d.get("max_horas") is not None and not 1 <= d["max_horas"] <= 15:
+            self.add_error("max_horas", "Entre 1 e 15 horas.")
+        return d
+
+
+class UsuarioNovoForm(UserCreationForm):
+    class Meta:
+        model = Usuario
+        fields = ("first_name", "username", "perfil")
+        labels = {"first_name": "Nome", "username": "Usuário (para entrar)"}
+
+
+class UsuarioEditarForm(forms.ModelForm):
+    class Meta:
+        model = Usuario
+        fields = ("first_name", "perfil", "is_active")
+        labels = {"first_name": "Nome", "is_active": "Ativo (pode entrar no sistema)"}
+
+
+class RedefinirSenhaForm(SetPasswordForm):
+    pass
+
+
+class HorarioForm(forms.ModelForm):
+    class Meta:
+        model = HorarioFuncionamento
+        fields = ("aberto", "abre", "fecha")
+
+    def clean(self):
+        d = super().clean()
+        abre, fecha = d.get("abre"), d.get("fecha")
+        if abre is not None and fecha is not None:
+            if not 0 <= abre <= 23:
+                self.add_error("abre", "Hora entre 0 e 23.")
+            if not 1 <= fecha <= 24:
+                self.add_error("fecha", "Hora entre 1 e 24 (24 = meia-noite).")
+            if abre >= fecha:
+                self.add_error("fecha", "Precisa fechar depois de abrir.")
+        return d
+
+
+HorarioFormSet = modelformset_factory(HorarioFuncionamento, form=HorarioForm, extra=0)

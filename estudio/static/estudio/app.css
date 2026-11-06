@@ -1,5 +1,5 @@
 :root{
-  --bg:#0A0A0A; --s1:#141312; --s2:#1C1A18; --barra:#0F0E0D; --linha:#2B2724; --linha2:#3A332C;
+  --bg:#000000; --s1:#141312; --s2:#1C1A18; --barra:#0F0E0D; --linha:#2B2724; --linha2:#3A332C;
   --txt:#F4EFE8; --txt2:#CFC7BC; --mute:#A8A096; --fraco:#7C756C;
   --ouro:#D4A86A; --ouro2:#E8C48E; --ouro-bg:#2A2116;
   --perigo:#FF7A7A; --perigo-bg:#3A1416; --perigo-borda:#4A2224; --ok:#6FE3C8; --ok-bg:#16302B;
@@ -132,6 +132,6 @@ nav.barra>a.mais-novo{justify-self:center;width:56px;height:56px;border-radius:1
 .alerta-ic{width:48px;height:48px;border-radius:14px;background:var(--perigo-bg);color:var(--perigo);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .oculto{display:none!important}
 .entrar{padding:calc(48px + env(safe-area-inset-top)) 28px 32px;display:flex;flex-direction:column;gap:28px;max-width:440px;margin:0 auto;min-height:100vh}
-.entrar img{width:180px;height:180px;object-fit:cover;border-radius:28px;align-self:center}
+.entrar img{width:220px;height:220px;object-fit:cover;align-self:center}
 .centro{text-align:center}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
