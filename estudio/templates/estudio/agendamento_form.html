@@ -8,7 +8,29 @@
 <main class="conteudo" style="gap:18px">
 {% if erro %}<div class="erro" role="alert">{{ erro }}</div>{% endif %}
 
-<div class="campo" id="bloco-cliente">Cliente
+<label class="campo">1 · Dia<input type="date" name="data" id="data" value="{{ valores.data }}" required><small id="janela"></small></label>
+
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">2 · Tipo</legend>
+<div class="grade2">
+<label class="chip"><input type="radio" name="tipo" value="ensaio"{% if valores.tipo != 'gravacao' %} checked{% endif %}><span>Ensaio · R$ {{ cfg.preco_ensaio|floatformat:0 }}/h</span></label>
+<label class="chip"><input type="radio" name="tipo" value="gravacao"{% if valores.tipo == 'gravacao' %} checked{% endif %}><span>Gravação · R$ {{ cfg.preco_gravacao|floatformat:0 }}/h</span></label>
+</div></fieldset>
+
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">3 · Duração</legend>
+<div class="chips grade">{% for h in "123456" %}
+<label class="chip"><input type="radio" name="horas" value="{{ h }}"{% if valores.horas|stringformat:"s" == h %} checked{% endif %}><span>{{ h }}h</span></label>{% endfor %}
+</div></fieldset>
+
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px" id="titulo-horarios">4 · Horários livres</legend>
+<div class="chips" id="horarios"><span class="sub" style="text-transform:none;letter-spacing:0">Escolha o dia e a duração.</span></div>
+</fieldset>
+
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">5 · Responsável por acompanhar</legend>
+<div class="grade3" id="responsaveis"></div>
+<p class="sub" style="margin:8px 0 0;font-size:12px;text-transform:none;letter-spacing:0" id="msg-responsavel"></p>
+</fieldset>
+
+<div class="campo" id="bloco-cliente">6 · Cliente
 <input type="hidden" name="cliente" id="cliente" value="{% if selecionado %}{{ selecionado.pk }}{% endif %}">
 <div id="cliente-sel" class="card fino{% if not selecionado %} oculto{% endif %}" style="display:flex;align-items:center;gap:12px;text-transform:none;letter-spacing:0">
 <span class="av" id="cliente-av">{{ selecionado.inicial }}</span>
@@ -17,32 +39,15 @@
 </div>
 <div id="cliente-busca"{% if selecionado %} class="oculto"{% endif %} style="display:flex;flex-direction:column;gap:8px">
 <input type="search" id="busca" placeholder="Buscar banda ou pessoa…" autocomplete="off" aria-label="Buscar cliente">
-<div class="lista" id="resultados" style="max-height:260px;overflow:auto">
-{% for c in clientes %}<button type="button" class="item cli" data-id="{{ c.pk }}" data-nome="{{ c.nome }}" style="all:unset;box-sizing:border-box;min-height:56px;padding:8px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--linha);cursor:pointer;width:100%"><span class="av">{{ c.inicial }}</span><span style="font-size:15px;font-weight:600;color:var(--txt);text-transform:none;letter-spacing:0">{{ c.nome }}</span></button>{% empty %}<div class="vazio" style="text-transform:none;letter-spacing:0">Nenhum cliente cadastrado ainda.</div>{% endfor %}
+<div class="lista oculto" id="resultados" style="max-height:260px;overflow:auto">
+{% for c in clientes %}<button type="button" class="item cli" data-id="{{ c.pk }}" data-nome="{{ c.nome }}" style="all:unset;box-sizing:border-box;min-height:56px;padding:8px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--linha);cursor:pointer;width:100%"><span class="av">{{ c.inicial }}</span><span style="font-size:15px;font-weight:600;color:var(--txt);text-transform:none;letter-spacing:0">{{ c.nome }}</span></button>{% endfor %}
 </div>
 <a class="btn pequeno" href="{% url 'cliente_novo' %}" style="text-transform:none;letter-spacing:0">+ Cadastrar cliente novo</a>
 </div>
 </div>
 <div id="situacao" class="oculto" role="status"></div>
 
-<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Tipo</legend>
-<div class="grade2">
-<label class="chip"><input type="radio" name="tipo" value="ensaio"{% if valores.tipo != 'gravacao' %} checked{% endif %}><span>Ensaio · R$ {{ cfg.preco_ensaio|floatformat:0 }}/h</span></label>
-<label class="chip"><input type="radio" name="tipo" value="gravacao"{% if valores.tipo == 'gravacao' %} checked{% endif %}><span>Gravação · R$ {{ cfg.preco_gravacao|floatformat:0 }}/h</span></label>
-</div></fieldset>
-
-<label class="campo">Dia<input type="date" name="data" id="data" value="{{ valores.data }}" required><small id="janela"></small></label>
-
-<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Duração</legend>
-<div class="chips grade">{% for h in "123456" %}
-<label class="chip"><input type="radio" name="horas" value="{{ h }}"{% if valores.horas|stringformat:"s" == h %} checked{% endif %}><span>{{ h }}h</span></label>{% endfor %}
-</div></fieldset>
-
-<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px" id="titulo-horarios">Horários livres</legend>
-<div class="chips" id="horarios"><span class="sub" style="text-transform:none;letter-spacing:0">Escolha o dia e a duração.</span></div>
-</fieldset>
-
-<label class="campo">Observação (opcional)<input type="text" name="observacao" maxlength="255" placeholder="Ex.: vão trazer o próprio amplificador"></label>
+<label class="campo">7 · Observação (opcional)<input type="text" name="observacao" maxlength="255" placeholder="Ex.: vão trazer o próprio amplificador"></label>
 <p class="sub" style="margin:0;font-size:12.5px" id="politica"></p>
 </main>
 <div class="rodape-fixo">
@@ -58,6 +63,8 @@ const precos={ensaio:{{ cfg.preco_ensaio|floatformat:"0"|default:"70" }},gravaca
 const minimo={ensaio:{{ cfg.min_horas_ensaio }},gravacao:{{ cfg.min_horas_gravacao }}};
 const taxa={ensaio:{{ cfg.taxa_ensaio_pct }},gravacao:{{ cfg.taxa_gravacao_pct }}};
 const horaInicial="{{ valores.hora }}";
+const euId="{{ request.user.pk }}";
+const respInicial="{{ valores.responsavel|default:request.user.pk }}";
 const f=document.getElementById('form-ag');
 const $=s=>f.querySelector(s);
 const brl=v=>'R$ '+v.toLocaleString('pt-BR');
@@ -69,12 +76,36 @@ function ajustarDuracao(){
   f.querySelectorAll('input[name=horas]').forEach(r=>{r.disabled=parseInt(r.value)<min;if(r.disabled&&r.checked)r.checked=false});
   if(!horas()){const r=[...f.querySelectorAll('input[name=horas]')].find(x=>!x.disabled&&parseInt(x.value)>=min);if(r)r.checked=true}
 }
+async function carregarResponsaveis(){
+  const d=$('#data').value;
+  const box=document.getElementById('responsaveis');
+  const msg=document.getElementById('msg-responsavel');
+  if(!d){box.innerHTML='';msg.textContent='';return}
+  const r=await fetch(`{% url 'responsaveis_json' %}?data=${d}`);const j=await r.json();
+  box.innerHTML='';
+  j.usuarios.forEach(u=>{
+    const lab=document.createElement('label');lab.className='chip';
+    const desabilitar=u.bloqueado&&String(u.id)!==euId;
+    const souEu=String(u.id)===euId;
+    const bloqueiaTransferencia=!j.pode_transferir&&!souEu;
+    const i=document.createElement('input');i.type='radio';i.name='responsavel';i.value=u.id;
+    i.disabled=desabilitar||bloqueiaTransferencia;
+    if(String(respInicial)===String(u.id)&&!i.disabled)i.checked=true;
+    const s=document.createElement('span');s.textContent=(souEu?'Eu ('+u.nome+')':u.nome)+(u.bloqueado?' · bloqueado':'');
+    lab.append(i,s);box.append(lab)
+  });
+  if(!f.querySelector('input[name=responsavel]:checked')){const eu=f.querySelector(`input[name=responsavel][value="${euId}"]`);if(eu){eu.checked=true}}
+  msg.textContent=j.pode_transferir
+    ? 'Escolhendo outra pessoa: ela recebe um pedido de confirmação no WhatsApp. Sem resposta até 1 dia antes, o convite expira e volta pra você.'
+    : 'Esse ensaio é hoje: só você pode acompanhar. Pra transferir pra outra pessoa, escolha uma data a partir de amanhã.';
+}
 async function carregar(){
   ajustarDuracao();
   const d=$('#data').value,h=horas(),t=tipo();
   document.getElementById('politica').textContent=`Cancelar ou remarcar é grátis até 48h antes. Depois disso: taxa de ${taxa[t]}% do valor total.`;
   const box=document.getElementById('horarios');
-  document.getElementById('titulo-horarios').textContent=h?`Horários livres para ${h}h`:'Horários livres';
+  document.getElementById('titulo-horarios').textContent=h?`4 · Horários livres para ${h}h`:'4 · Horários livres';
+  carregarResponsaveis();
   if(!d||!h){box.innerHTML='';resumo();return}
   box.innerHTML='<span class="sub">Carregando…</span>';
   const r=await fetch(`{% url 'horarios_json' %}?data=${d}&tipo=${t}&horas=${h}`);const j=await r.json();
@@ -95,10 +126,15 @@ function resumo(){
   document.getElementById('resumo').textContent=sel?`${nome} · ${String(sel.value).padStart(2,'0')}:00–${String((+sel.value+h)%24).padStart(2,'0')}:00`:(h?`${nome} · ${h}h`:'Escolha a duração');
 }
 f.addEventListener('change',e=>{if(e.target.name==='hora')resumo();else if(['tipo','horas','data'].includes(e.target.name))carregar()});
-// clientes
+// clientes: só o campo de busca; a lista só aparece depois que a pessoa digita
 const busca=document.getElementById('busca');
-busca&&busca.addEventListener('input',()=>{const q=busca.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  f.querySelectorAll('.cli').forEach(b=>{const n=b.dataset.nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');b.style.display=n.includes(q)?'flex':'none'})});
+const resultados=document.getElementById('resultados');
+busca&&busca.addEventListener('input',()=>{
+  const q=busca.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(!q){resultados.classList.add('oculto');return}
+  resultados.classList.remove('oculto');
+  f.querySelectorAll('.cli').forEach(b=>{const n=b.dataset.nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');b.style.display=n.includes(q)?'flex':'none'})
+});
 async function situacao(id){
   const box=document.getElementById('situacao');box.className='oculto';box.innerHTML='';
   if(!id)return;
@@ -112,7 +148,7 @@ f.querySelectorAll('.cli').forEach(b=>b.addEventListener('click',()=>{
   $('#cliente').value=b.dataset.id;document.getElementById('cliente-nome').textContent=b.dataset.nome;
   document.getElementById('cliente-av').textContent=b.dataset.nome.charAt(0).toUpperCase();
   document.getElementById('cliente-sel').classList.remove('oculto');document.getElementById('cliente-busca').classList.add('oculto');situacao(b.dataset.id)}));
-document.getElementById('trocar').addEventListener('click',()=>{document.getElementById('cliente-sel').classList.add('oculto');document.getElementById('cliente-busca').classList.remove('oculto');busca.focus()});
+document.getElementById('trocar').addEventListener('click',()=>{document.getElementById('cliente-sel').classList.add('oculto');document.getElementById('cliente-busca').classList.remove('oculto');resultados.classList.add('oculto');busca.value='';busca.focus()});
 f.addEventListener('submit',e=>{if(!$('#cliente').value){e.preventDefault();const box=document.getElementById('situacao');box.className='';box.innerHTML='<div class="erro" role="alert">Escolha o cliente antes de confirmar.</div>';busca.focus()}});
 situacao($('#cliente').value);carregar();
 })();

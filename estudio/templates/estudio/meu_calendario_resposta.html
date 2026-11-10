@@ -1,0 +1,22 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Resposta enviada{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>{% if aceitou %}Combinado!{% else %}Recusado{% endif %}</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:16px">
+<div class="card{% if not aceitou %} perigo{% endif %}" style="display:flex;flex-direction:column;gap:10px">
+<div class="linha"><span class="titulo-card">{{ ag.cliente }}</span><span class="pilula{% if not aceitou %} perigo{% endif %}">{{ ag.get_tipo_display }}</span></div>
+<span class="sub" style="font-size:13.5px">{{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }}</span>
+{% if aceitou %}
+<p class="sub" style="margin:0">Você vai acompanhar esse {{ ag.get_tipo_display|lower }}. {{ quem_marcou }} foi avisado que você aceitou.</p>
+{% else %}
+<p class="sub" style="margin:0">Tudo bem, a responsabilidade voltou pra {{ quem_marcou }}, que já foi avisado.</p>
+{% endif %}
+</div>
+{% if whats %}
+<a class="btn ouro" style="min-height:54px" href="{{ whats }}" target="_blank" rel="noopener">AVISAR {{ quem_marcou|upper }} NO WHATSAPP</a>
+{% endif %}
+<a class="btn" href="{% url 'meu_calendario' %}">Voltar pro Meu Calendário</a>
+</main>
+{% endblock %}

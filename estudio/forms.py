@@ -51,6 +51,7 @@ class AgendamentoForm(forms.Form):
     data = forms.DateField()
     hora = forms.IntegerField(min_value=0, max_value=23)
     horas = forms.IntegerField(min_value=1, max_value=12)
+    responsavel = forms.ModelChoiceField(queryset=Usuario.objects.filter(is_active=True), required=False)
     observacao = forms.CharField(max_length=255, required=False)
     confirmar_blacklist = forms.BooleanField(required=False)
 
@@ -90,15 +91,31 @@ class FinanceiroForm(forms.ModelForm):
 class UsuarioNovoForm(UserCreationForm):
     class Meta:
         model = Usuario
-        fields = ("first_name", "username", "perfil")
-        labels = {"first_name": "Nome", "username": "Usuário (para entrar)"}
+        fields = ("first_name", "username", "telefone", "perfil")
+        labels = {"first_name": "Nome", "username": "Usuário (para entrar)", "telefone": "WhatsApp"}
+
+    def clean_telefone(self):
+        from .models import so_digitos
+
+        d = so_digitos(self.cleaned_data.get("telefone", ""))
+        if d and len(d) < 10:
+            raise forms.ValidationError("Informe o WhatsApp com DDD.")
+        return self.cleaned_data["telefone"]
 
 
 class UsuarioEditarForm(forms.ModelForm):
     class Meta:
         model = Usuario
-        fields = ("first_name", "perfil", "is_active")
-        labels = {"first_name": "Nome", "is_active": "Ativo (pode entrar no sistema)"}
+        fields = ("first_name", "telefone", "perfil", "is_active")
+        labels = {"first_name": "Nome", "telefone": "WhatsApp", "is_active": "Ativo (pode entrar no sistema)"}
+
+    def clean_telefone(self):
+        from .models import so_digitos
+
+        d = so_digitos(self.cleaned_data.get("telefone", ""))
+        if d and len(d) < 10:
+            raise forms.ValidationError("Informe o WhatsApp com DDD.")
+        return self.cleaned_data["telefone"]
 
 
 class RedefinirSenhaForm(SetPasswordForm):

@@ -3,16 +3,21 @@
 {% block topo %}
 <header class="topo" style="flex-direction:column;align-items:stretch;gap:14px">
 <div class="linha"><h1>Agenda</h1>
-<div class="segmento" role="group" aria-label="Visualização"><a href="{% url 'agenda' %}">Semana</a><a class="on" href="{% url 'agenda_mes' %}">Mês</a></div></div>
+<div class="segmento" role="group" aria-label="Visualização"><a href="{% url 'agenda' %}">Semana</a><a class="on" href="{% url 'agenda_mes' %}?m={{ mes_atual }}&v={{ visao }}">Mês</a></div></div>
+<div class="segmento" role="group" aria-label="Formato">
+<a class="{% if visao == 'cal' %}on{% endif %}" href="?m={{ mes_atual }}&v=cal"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Calendário</a>
+<a class="{% if visao == 'lista' %}on{% endif %}" href="?m={{ mes_atual }}&v=lista"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Lista</a>
+</div>
 <div class="linha">
-<a class="btn icone" style="border:0" href="?m={{ anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+<a class="btn icone" style="border:0" href="?m={{ anterior }}&v={{ visao }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
 <span style="font-weight:600">{{ titulo }}</span>
-<a class="btn icone" style="border:0" href="?m={{ proxima }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+<a class="btn icone" style="border:0" href="?m={{ proxima }}&v={{ visao }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
 </div>
 </header>
 {% endblock %}
 {% block conteudo %}
 <main class="conteudo">
+{% if visao == 'cal' %}
 <div class="mes">
 {% for d in dias %}<div class="cab">{{ d }}</div>{% endfor %}
 {% for semana in semanas %}{% for d in semana %}
@@ -24,5 +29,22 @@
 <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ouro)"></span> metade ou mais</span>
 <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--perigo)"></span> lotado</span>
 </div>
+{% else %}
+<div class="lista-mes">
+<div class="lm-cab"><span>Dia</span><span>Cliente</span><span>Horário</span></div>
+<div class="lm-rolagem">
+{% for l in linhas %}
+<a class="lm-linha{% if l.cancelado %} cancelado{% endif %}" href="{% url 'agendamento' l.ag.pk %}">
+<span class="lm-dia">{% if l.nova_dia %}{{ l.data|date:"d" }}{% endif %}</span>
+<span class="lm-cliente">{{ l.ag.cliente }}{% if l.cancelado %}<span class="pilula perigo" style="margin-left:6px">cancelado</span>{% elif l.bl %}<span class="pilula perigo" style="margin-left:6px">blacklist</span>{% endif %}</span>
+<span class="lm-hora">{{ l.ag.inicio|time:"H:i" }}</span>
+</a>
+{% empty %}<div class="vazio">Nenhum agendamento neste mês.</div>{% endfor %}
+</div>
+</div>
+<div class="sub" style="display:flex;gap:10px;align-items:center;font-size:12px;margin-top:6px">
+<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2B1818;border:1px solid var(--perigo)"></span> cancelado / blacklist
+</div>
+{% endif %}
 </main>
 {% endblock %}

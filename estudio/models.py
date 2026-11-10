@@ -25,6 +25,10 @@ class Usuario(AbstractUser):
         EDICAO = "edicao", "Edição"
 
     perfil = models.CharField(max_length=10, choices=Perfil.choices, default=Perfil.EDICAO)
+    telefone = models.CharField(
+        "WhatsApp", max_length=20, blank=True,
+        help_text="Usado para mandar o pedido de confirmação quando essa pessoa é escolhida como responsável por um ensaio/gravação.",
+    )
 
     @property
     def is_admin(self):
@@ -33,16 +37,28 @@ class Usuario(AbstractUser):
     def save(self, *args, **kwargs):
         # Só Administrador entra no painel /admin do Django.
         self.is_staff = self.perfil == self.Perfil.ADMIN or self.is_superuser
+        if self.telefone:
+            self.telefone = normalizar_whatsapp(self.telefone)
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.get_full_name() or self.username
 
+    @property
+    def telefone_formatado(self):
+        return _whatsapp_formatado(self.telefone)
+
+    def dias_indisponiveis_entre(self, inicio, fim):
+        """Datas (set) em que esse usuário marcou que não pode acompanhar, dentro do intervalo."""
+        return set(
+            self.dias_bloqueados.filter(data__gte=inicio, data__lte=fim).values_list("data", flat=True)
+        )
+
 
 class Configuracao(models.Model):
     preco_ensaio = models.DecimalField("Preço da hora de ensaio", max_digits=8, decimal_places=2, default=Decimal("70"))
     preco_gravacao = models.DecimalField("Preço da hora de gravação", max_digits=8, decimal_places=2, default=Decimal("400"))
-    taxa_ensaio_pct = models.PositiveSmallIntegerField("Taxa tardia ensaio (%)", default=70)
+    taxa_ensaio_pct = models.PositiveSmallIntegerField("Taxa tardia ensaio (%)", default=75)
     taxa_gravacao_pct = models.PositiveSmallIntegerField("Taxa tardia gravação (%)", default=50)
     antecedencia_horas = models.PositiveSmallIntegerField("Antecedência sem taxa (horas)", default=48)
     min_horas_ensaio = models.PositiveSmallIntegerField(default=2)
@@ -103,6 +119,16 @@ def normalizar_whatsapp(telefone):
     return "55" + d
 
 
+def _whatsapp_formatado(d):
+    if d.startswith("55") and len(d) in (12, 13):
+        local = d[2:]
+        ddd, num = local[:2], local[2:]
+        if len(num) == 9:
+            return f"({ddd}) {num[0]} {num[1:5]}-{num[5:]}"
+        return f"({ddd}) {num[:4]}-{num[4:]}"
+    return d
+
+
 class Contato(models.Model):
     nome = models.CharField(max_length=120)
     whatsapp = models.CharField(max_length=20, db_index=True, help_text="Só números, com 55 na frente")
@@ -121,14 +147,7 @@ class Contato(models.Model):
 
     @property
     def whatsapp_formatado(self):
-        d = self.whatsapp
-        if d.startswith("55") and len(d) in (12, 13):
-            local = d[2:]
-            ddd, num = local[:2], local[2:]
-            if len(num) == 9:
-                return f"({ddd}) {num[0]} {num[1:5]}-{num[5:]}"
-            return f"({ddd}) {num[:4]}-{num[4:]}"
-        return d
+        return _whatsapp_formatado(self.whatsapp)
 
     def debitos_abertos(self):
         return Debito.objects.filter(cliente__vinculos__contato=self, quitado_em__isnull=True).distinct()
@@ -219,6 +238,12 @@ class Agendamento(models.Model):
         CANCELADO = "cancelado", "Cancelado"
         FALTA = "falta", "Falta"
 
+    class RespStatus(models.TextChoices):
+        ACEITO = "aceito", "Aceito"
+        PENDENTE = "pendente", "Aguardando resposta"
+        RECUSADO = "recusado", "Recusado"
+        EXPIRADO = "expirado", "Expirado"
+
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="agendamentos")
     contato = models.ForeignKey(Contato, on_delete=models.SET_NULL, null=True, blank=True, related_name="agendamentos")
     tipo = models.CharField(max_length=10, choices=Tipo.choices, default=Tipo.ENSAIO)
@@ -236,6 +261,17 @@ class Agendamento(models.Model):
     cobranca_conferida = models.BooleanField(
         default=False, help_text="Depois do ensaio, a equipe já confirmou se a multa foi paga ou não."
     )
+
+    # ---- responsável por acompanhar (quem fica no estúdio durante o ensaio/gravação) ----
+    responsavel = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="agendamentos_responsavel",
+        help_text="Quem vai acompanhar esse ensaio/gravação no estúdio.",
+    )
+    responsavel_status = models.CharField(
+        max_length=10, choices=RespStatus.choices, default=RespStatus.ACEITO, db_index=True,
+    )
+    responsavel_definido_em = models.DateTimeField(null=True, blank=True)
+    lembrete_enviado_em = models.DateTimeField(null=True, blank=True, help_text="Quando alguém da equipe marcou o lembrete do dia como enviado.")
 
     objects = AgendamentoQuerySet.as_manager()
 
@@ -256,6 +292,51 @@ class Agendamento(models.Model):
     @property
     def ja_comecou(self):
         return timezone.now() >= self.inicio
+
+    @property
+    def prazo_resposta_responsavel(self):
+        """Convites não respondidos até 1 dia antes do início expiram."""
+        return self.inicio - timedelta(days=1)
+
+    @property
+    def responsavel_pendente(self):
+        return self.responsavel_status == self.RespStatus.PENDENTE
+
+
+class ConviteResponsavel(models.Model):
+    """Histórico de cada convite para acompanhar um ensaio/gravação (quem convidou, quem respondeu e como)."""
+
+    Status = Agendamento.RespStatus
+
+    agendamento = models.ForeignKey(Agendamento, on_delete=models.CASCADE, related_name="convites_responsavel")
+    convidado = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name="convites_recebidos")
+    convidado_por = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, related_name="convites_enviados")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDENTE, db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    respondido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+
+    def __str__(self):
+        return f"{self.convidado} · {self.agendamento} · {self.get_status_display()}"
+
+
+class UsuarioDiaIndisponivel(models.Model):
+    """Dias em que um usuário avisou que não pode ser escolhido como responsável por um ensaio/gravação."""
+
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name="dias_bloqueados")
+    data = models.DateField(db_index=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["data"]
+        unique_together = [("usuario", "data")]
+        verbose_name = "dia indisponível"
+        verbose_name_plural = "dias indisponíveis"
+
+    def __str__(self):
+        return f"{self.usuario} · {self.data:%d/%m/%Y}"
 
 
 class Debito(models.Model):

@@ -88,10 +88,10 @@ class CancelamentoTest(Base):
         self.assertIsNone(debito)
         self.assertFalse(self.fire.na_blacklist)
 
-    def test_cancelar_tardio_ensaio_70(self):
+    def test_cancelar_tardio_ensaio_75(self):
         ag = self.agendar(horas=4)  # R$ 280
         debito = regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=47))
-        self.assertEqual(debito.valor, Decimal("196.00"))
+        self.assertEqual(debito.valor, Decimal("210.00"))
         self.assertEqual(debito.motivo, Debito.Motivo.CANCELAMENTO)
         self.assertTrue(self.fire.na_blacklist)
 
@@ -105,7 +105,7 @@ class CancelamentoTest(Base):
         with self.assertRaises(regras.RegraErro):
             regras.marcar_falta(self.edicao, ag, agora=ag.inicio - timedelta(minutes=1))
         debito = regras.marcar_falta(self.edicao, ag, agora=ag.inicio + timedelta(minutes=30))
-        self.assertEqual(debito.valor, Decimal("98.00"))
+        self.assertEqual(debito.valor, Decimal("105.00"))
         ag.refresh_from_db()
         self.assertEqual(ag.status, Agendamento.Status.FALTA)
 
@@ -127,7 +127,7 @@ class RemarcacaoTest(Base):
     def test_admin_remarca_tardio_com_taxa(self):
         ag = self.agendar()  # R$ 140
         debito = regras.remarcar(self.admin, ag, SAB, 10, agora=ag.inicio - timedelta(hours=5))
-        self.assertEqual(debito.valor, Decimal("98.00"))
+        self.assertEqual(debito.valor, Decimal("105.00"))
         self.assertEqual(debito.motivo, Debito.Motivo.REMARCACAO)
 
     def test_remarcar_no_proprio_horario_nao_choca(self):
@@ -418,7 +418,7 @@ class BlacklistTelaTest(Base):
 class CobrancaMultaTest(Base):
     def _com_multa(self):
         ag = self.agendar()
-        regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=1))  # multa R$ 98
+        regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=1))  # multa R$ 105
         self.agendar(usuario=self.admin, confirmar_blacklist=True, data=SAB, hora=10)  # ensaio novo, R$ 140
         return Agendamento.objects.get(inicio=regras.inicio_em(SAB, 10))
 
@@ -427,7 +427,7 @@ class CobrancaMultaTest(Base):
         self.client.force_login(self.admin)
         r = self.client.get(reverse("agendamento", args=[ag.pk]))
         self.assertContains(r, "Cobrar multa no dia")
-        self.assertContains(r, "R$ 238")  # 140 + 98
+        self.assertContains(r, "R$ 245")  # 140 + 105
 
     def test_pendencia_depois_do_ensaio(self):
         ag = self._com_multa()
@@ -492,3 +492,76 @@ class PagarTiraDaBlacklistTest(Base):
         regras.quitar_debito(self.admin, d2)
         self.fire.refresh_from_db()
         self.assertFalse(self.fire.na_blacklist)
+
+
+class ResponsavelTest(Base):
+    def _fabio(self, username="fabio"):
+        return Usuario.objects.create_user(username, password="x", perfil=Usuario.Perfil.EDICAO)
+
+    def test_delegar_responsavel_cria_convite_pendente(self):
+        fabio = self._fabio()
+        ag = self.agendar(usuario=self.admin, responsavel=fabio)
+        self.assertEqual(ag.responsavel, fabio)
+        self.assertTrue(ag.responsavel_pendente)
+        self.assertEqual(regras.convites_pendentes(fabio).count(), 1)
+
+    def test_nao_pode_delegar_no_mesmo_dia(self):
+        fabio = self._fabio()
+        agora_mesmo_dia = regras.inicio_em(SEG, 10)
+        with self.assertRaises(regras.RegraErro):
+            regras.criar_agendamento(
+                self.admin, self.fire, "ensaio", SEG, 18, 2, responsavel=fabio, agora=agora_mesmo_dia,
+            )
+
+    def test_dia_bloqueado_impede_delegacao(self):
+        fabio = self._fabio()
+        regras.bloquear_dia(fabio, SEG)
+        with self.assertRaises(regras.RegraErro):
+            self.agendar(usuario=self.admin, responsavel=fabio)
+
+    def test_responder_convite_aceitar(self):
+        fabio = self._fabio()
+        ag = self.agendar(usuario=self.admin, responsavel=fabio)
+        ag = regras.responder_convite(fabio, ag, True)
+        self.assertEqual(ag.responsavel_status, Agendamento.RespStatus.ACEITO)
+        self.assertEqual(regras.responsabilidades_aceitas(fabio).count(), 1)
+
+    def test_responder_convite_recusar_volta_pro_criador(self):
+        fabio = self._fabio()
+        ag = self.agendar(usuario=self.admin, responsavel=fabio)
+        ag = regras.responder_convite(fabio, ag, False)
+        self.assertEqual(ag.responsavel, self.admin)
+        self.assertEqual(regras.historico_convites(fabio).count(), 1)
+
+    def test_expirar_convite_sem_resposta(self):
+        fabio = self._fabio()
+        ag = self.agendar(usuario=self.admin, responsavel=fabio)
+        expirados = regras.expirar_convites_pendentes(agora=ag.inicio - timedelta(hours=1))
+        self.assertEqual(len(expirados), 1)
+        ag.refresh_from_db()
+        self.assertEqual(ag.responsavel, self.admin)
+
+    def test_bloquear_e_desbloquear_dia(self):
+        regras.bloquear_dia(self.edicao, SEG)
+        self.assertIn(self.edicao.pk, regras.usuarios_bloqueados_em(SEG))
+        regras.desbloquear_dia(self.edicao, SEG)
+        self.assertNotIn(self.edicao.pk, regras.usuarios_bloqueados_em(SEG))
+
+
+class TelasNovasTest(Base):
+    def test_meu_calendario_tela(self):
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("meu_calendario"))
+        self.assertEqual(r.status_code, 200)
+
+    def test_dias_indisponiveis_bloqueia_dia(self):
+        self.client.force_login(self.edicao)
+        d = timezone.localdate() + timedelta(days=5)
+        r = self.client.post(reverse("dias_indisponiveis"), {"data": d.isoformat(), "m": ""})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(self.edicao.dias_bloqueados.filter(data=d).exists())
+
+    def test_lembretes_hoje_tela(self):
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("lembretes_hoje"))
+        self.assertEqual(r.status_code, 200)

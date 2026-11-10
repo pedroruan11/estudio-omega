@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Agendamento, Configuracao, Debito, HorarioFuncionamento
+from .models import Agendamento, Configuracao, ConviteResponsavel, Debito, HorarioFuncionamento, UsuarioDiaIndisponivel, Usuario
 
 
 class RegraErro(Exception):
@@ -162,13 +162,43 @@ def _checar_horario(data, hora, horas, tipo, ignorar_id=None, agora=None):
     return inicio
 
 
-def criar_agendamento(usuario, cliente, tipo, data, hora, horas, contato=None, confirmar_blacklist=False, observacao="", agora=None):
+def pode_transferir_responsavel(data, agora=None):
+    """Só dá para escolher outra pessoa pra acompanhar em ensaios a partir de amanhã
+    (regra do Pedro, 09/11/2026): no mesmo dia há risco de a pessoa não ver a tempo."""
+    agora = agora or timezone.now()
+    return data > timezone.localdate(agora)
+
+
+def usuarios_bloqueados_em(data):
+    """IDs de quem marcou que não pode acompanhar ensaios/gravações nesse dia."""
+    return set(UsuarioDiaIndisponivel.objects.filter(data=data).values_list("usuario_id", flat=True))
+
+
+def usuarios_disponiveis_para_responsavel(data):
+    """Usuários ativos que podem ser escolhidos como responsável nesse dia."""
+    bloqueados = usuarios_bloqueados_em(data)
+    qs = Usuario.objects.filter(is_active=True).order_by("first_name", "username")
+    return [u for u in qs if u.pk not in bloqueados]
+
+
+def criar_agendamento(
+    usuario, cliente, tipo, data, hora, horas, contato=None, confirmar_blacklist=False,
+    observacao="", agora=None, responsavel=None,
+):
     if cliente.na_blacklist and not (usuario.is_admin and confirmar_blacklist):
         raise ClienteNaBlacklist(cliente)
+    agora = agora or timezone.now()
+    responsavel = responsavel or usuario
+    if responsavel.pk != usuario.pk:
+        if not pode_transferir_responsavel(data, agora):
+            raise RegraErro("Só é possível escolher outra pessoa pra acompanhar em ensaios a partir de amanhã.")
+        if responsavel.pk in usuarios_bloqueados_em(data):
+            raise RegraErro(f"{responsavel} marcou que não pode acompanhar nesse dia.")
     with transaction.atomic():
         cfg = _travar()
         inicio = _checar_horario(data, hora, horas, tipo, agora=agora)
-        return Agendamento.objects.create(
+        pendente = responsavel.pk != usuario.pk
+        ag = Agendamento.objects.create(
             cliente=cliente,
             contato=contato or cliente.contato_principal,
             tipo=tipo,
@@ -177,7 +207,13 @@ def criar_agendamento(usuario, cliente, tipo, data, hora, horas, contato=None, c
             valor_hora=preco_hora(tipo, cfg),
             criado_por=usuario,
             observacao=observacao,
+            responsavel=responsavel,
+            responsavel_status=Agendamento.RespStatus.PENDENTE if pendente else Agendamento.RespStatus.ACEITO,
+            responsavel_definido_em=agora,
         )
+        if pendente:
+            ConviteResponsavel.objects.create(agendamento=ag, convidado=responsavel, convidado_por=usuario)
+        return ag
 
 
 def _gerar_debito(usuario, ag, motivo, cfg):
@@ -339,6 +375,115 @@ def multa_nao_paga(usuario, ag):
     """A banda ensaiou mas não pagou a multa: some o aviso deste ensaio; o débito e a blacklist continuam."""
     ag.cobranca_conferida = True
     ag.save(update_fields=["cobranca_conferida"])
+
+
+# ---------- responsável por acompanhar ----------
+
+def convites_pendentes(usuario):
+    return (
+        Agendamento.objects.ativos()
+        .filter(responsavel=usuario, responsavel_status=Agendamento.RespStatus.PENDENTE)
+        .select_related("cliente", "criado_por")
+        .order_by("inicio")
+    )
+
+
+def responsabilidades_aceitas(usuario, agora=None):
+    agora = agora or timezone.now()
+    return (
+        Agendamento.objects.ativos()
+        .filter(responsavel=usuario, responsavel_status=Agendamento.RespStatus.ACEITO, inicio__gte=agora)
+        .exclude(criado_por=usuario)
+        .select_related("cliente")
+        .order_by("inicio")
+    )
+
+
+def historico_convites(usuario, limite=10):
+    return (
+        ConviteResponsavel.objects.filter(
+            convidado=usuario, status__in=[Agendamento.RespStatus.RECUSADO, Agendamento.RespStatus.EXPIRADO]
+        )
+        .select_related("agendamento", "agendamento__cliente", "agendamento__criado_por")
+        .order_by("-criado_em")[:limite]
+    )
+
+
+def responder_convite(usuario, ag, aceitar, agora=None):
+    agora = agora or timezone.now()
+    if ag.responsavel_id != usuario.pk or ag.responsavel_status != Agendamento.RespStatus.PENDENTE:
+        raise RegraErro("Esse convite não está mais disponível pra você responder.")
+    convite = ag.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE).order_by("-criado_em").first()
+    with transaction.atomic():
+        if aceitar:
+            ag.responsavel_status = Agendamento.RespStatus.ACEITO
+            ag.save(update_fields=["responsavel_status"])
+            if convite:
+                convite.status = Agendamento.RespStatus.ACEITO
+                convite.respondido_em = agora
+                convite.save(update_fields=["status", "respondido_em"])
+        else:
+            ag.responsavel = ag.criado_por
+            ag.responsavel_status = Agendamento.RespStatus.ACEITO
+            ag.responsavel_definido_em = agora
+            ag.save(update_fields=["responsavel", "responsavel_status", "responsavel_definido_em"])
+            if convite:
+                convite.status = Agendamento.RespStatus.RECUSADO
+                convite.respondido_em = agora
+                convite.save(update_fields=["status", "respondido_em"])
+    return ag
+
+
+def expirar_convites_pendentes(agora=None):
+    """Convites sem resposta até 1 dia antes do início voltam pra quem agendou.
+    Retorna [(agendamento, usuario_que_nao_respondeu), ...] pra quem for avisar no WhatsApp."""
+    agora = agora or timezone.now()
+    expirados = []
+    pendentes = (
+        Agendamento.objects.ativos()
+        .filter(responsavel_status=Agendamento.RespStatus.PENDENTE, inicio__lte=agora + timedelta(days=1))
+        .select_related("criado_por", "responsavel", "cliente")
+    )
+    with transaction.atomic():
+        for ag in pendentes:
+            convidado = ag.responsavel
+            convite = ag.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE).order_by("-criado_em").first()
+            ag.responsavel = ag.criado_por
+            ag.responsavel_status = Agendamento.RespStatus.ACEITO
+            ag.responsavel_definido_em = agora
+            ag.save(update_fields=["responsavel", "responsavel_status", "responsavel_definido_em"])
+            if convite:
+                convite.status = Agendamento.RespStatus.EXPIRADO
+                convite.respondido_em = agora
+                convite.save(update_fields=["status", "respondido_em"])
+            expirados.append((ag, convidado))
+    return expirados
+
+
+def bloquear_dia(usuario, data):
+    UsuarioDiaIndisponivel.objects.get_or_create(usuario=usuario, data=data)
+
+
+def desbloquear_dia(usuario, data):
+    UsuarioDiaIndisponivel.objects.filter(usuario=usuario, data=data).delete()
+
+
+# ---------- lembrete do dia (meio-dia) ----------
+
+def agendamentos_de_hoje_para_lembrar(agora=None):
+    agora = agora or timezone.now()
+    hoje = timezone.localdate(agora)
+    return (
+        Agendamento.objects.ativos()
+        .filter(inicio__gte=inicio_em(hoje, 0), inicio__lt=inicio_em(hoje, 0) + timedelta(days=1))
+        .select_related("cliente", "contato")
+        .order_by("inicio")
+    )
+
+
+def marcar_lembrete_enviado(ag, agora=None):
+    ag.lembrete_enviado_em = agora or timezone.now()
+    ag.save(update_fields=["lembrete_enviado_em"])
 
 
 def lancar_multa(usuario, cliente, valor, descricao):

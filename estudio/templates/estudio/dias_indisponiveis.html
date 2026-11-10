@@ -1,0 +1,30 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Dias que não posso{% endblock %}
+{% block topo %}
+<header class="topo" style="flex-direction:column;align-items:stretch;gap:14px">
+<div class="linha"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Dias que não posso</h1></div>
+<div class="linha">
+<a class="btn icone" style="border:0" href="?m={{ anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+<span style="font-weight:600">{{ titulo }}</span>
+<a class="btn icone" style="border:0" href="?m={{ proxima }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+</div>
+</header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo">
+<p class="sub" style="margin:0">Marque os dias em que você não pode ser escolhido como responsável por acompanhar um ensaio ou gravação. Toque de novo pra desmarcar.</p>
+<div class="mes">
+{% for d in dias %}<div class="cab">{{ d }}</div>{% endfor %}
+{% for semana in semanas %}{% for d in semana %}
+<form method="post" action="{% url 'dias_indisponiveis' %}">{% csrf_token %}
+<input type="hidden" name="data" value="{{ d.data|date:'Y-m-d' }}">
+<input type="hidden" name="m" value="{{ mes_atual }}">
+<button type="submit" class="{% if d.fora %}fora{% endif %}{% if d.hoje %} hoje{% endif %}{% if d.passado %} passado{% endif %}{% if d.bloqueado %} bloqueado{% endif %}"{% if d.passado %} disabled{% endif %} aria-label="{{ d.data|date:'d/m' }}{% if d.bloqueado %}, bloqueado{% endif %}">{{ d.data|date:"j" }}</button>
+</form>
+{% endfor %}{% endfor %}
+</div>
+<div class="sub" style="display:flex;gap:10px;align-items:center;font-size:12.5px;margin-top:6px">
+<span style="display:inline-block;width:10px;height:10px;border-radius:4px;background:var(--perigo-bg);border:1px solid var(--perigo-borda)"></span> dia bloqueado
+</div>
+</main>
+{% endblock %}

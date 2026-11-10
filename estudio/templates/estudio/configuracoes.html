@@ -10,7 +10,7 @@
 {% for u in usuarios %}
 <a href="{% url 'usuario_editar' u.pk %}"{% if not u.is_active %} style="opacity:.5"{% endif %}>
 <span class="av">{{ u.get_full_name|default:u.username|slice:":1"|upper }}</span>
-<span class="item-txt"><b>{{ u.get_full_name|default:u.username }}</b><span class="sub" style="font-size:12.5px">{{ u.username }}{% if u.last_login %} · último acesso {{ u.last_login|date:"d/m H:i" }}{% else %} · nunca entrou{% endif %}</span></span>
+<span class="item-txt"><b>{{ u.get_full_name|default:u.username }}</b><span class="sub" style="font-size:12.5px">{{ u.username }}{% if u.telefone %} · {{ u.telefone_formatado }}{% else %} · sem WhatsApp cadastrado{% endif %}</span></span>
 {% if not u.is_active %}<span class="pilula cinza">Inativo</span>{% elif u.is_admin %}<span class="pilula">Admin</span>{% else %}<span class="pilula cinza">Edição</span>{% endif %}
 </a>
 {% endfor %}

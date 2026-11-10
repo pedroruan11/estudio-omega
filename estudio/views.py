@@ -161,7 +161,28 @@ def _faixas_contexto(data):
             multa = cli.total_em_aberto()
             f["bl"] = cli.blacklist_manual or multa > 0
             f["multa"] = brl(multa) if multa > 0 else ""
+            ag = f["ag"]
+            if ag.responsavel_id and ag.responsavel_id != ag.criado_por_id:
+                f["resp_nome"] = ag.responsavel.get_full_name() or ag.responsavel.username
+                f["resp_pendente"] = ag.responsavel_pendente
     return faixas
+
+
+def _expirar_convites_e_avisar(request):
+    """Roda a cada carregamento da tela inicial (como o backup automático): convites de
+    responsável sem resposta até 1 dia antes voltam pra quem agendou, que é avisado na hora."""
+    try:
+        expirados = regras.expirar_convites_pendentes()
+    except Exception:
+        return
+    for ag, convidado in expirados:
+        if ag.criado_por_id == request.user.pk:
+            nome = convidado.get_full_name() or convidado.username if convidado else "a pessoa escolhida"
+            messages.info(
+                request,
+                f"O pedido pra {nome} acompanhar o {ag.get_tipo_display().lower()} de {ag.cliente} "
+                f"({timezone.localtime(ag.inicio):%d/%m %H:%M}) expirou sem resposta. Você voltou a ser o responsável.",
+            )
 
 
 @login_required
@@ -172,16 +193,16 @@ def inicio(request):
         backup_automatico_se_preciso()
     except Exception:  # backup nunca pode derrubar a tela inicial
         pass
+    _expirar_convites_e_avisar(request)
     hoje = timezone.localdate()
     faixas = _faixas_contexto(hoje)
     ocupadas = sum(f["horas"] for f in faixas if not f["livre"])
     livres = sum(f["horas"] for f in faixas if f["livre"])
     janela = HorarioFuncionamento.do_dia(hoje)
-    amanha = hoje + timedelta(days=1)
-    proximos = (
-        Agendamento.objects.ativos()
-        .filter(inicio__gte=regras.inicio_em(amanha, 0), inicio__lt=regras.inicio_em(amanha, 0) + timedelta(days=1))
-        .select_related("cliente")
+    agora_local = timezone.localtime()
+    lembretes_pendentes = (
+        regras.agendamentos_de_hoje_para_lembrar().filter(lembrete_enviado_em__isnull=True).count()
+        if agora_local.hour >= 12 else 0
     )
     return render(request, "estudio/inicio.html", {
         "hoje": hoje,
@@ -191,8 +212,8 @@ def inicio(request):
         "ocupadas": ocupadas,
         "livres": livres,
         "janela_txt": texto_janela(janela),
-        "amanha": proximos,
         "pendencias": regras.pendencias_cobranca().count(),
+        "lembretes_pendentes": lembretes_pendentes,
         "aba": "inicio",
     })
 
@@ -233,6 +254,7 @@ def agenda_mes(request):
         base = date(ano, mes, 1)
     except ValueError:
         base = hoje.replace(day=1)
+    visao = "lista" if request.GET.get("v") == "lista" else "cal"
     ultimo = calendar.monthrange(base.year, base.month)[1]
     ini = regras.inicio_em(base, 0)
     fim = regras.inicio_em(base.replace(day=ultimo), 0) + timedelta(days=1)
@@ -252,11 +274,33 @@ def agenda_mes(request):
         semanas.append(linha)
     ant = (base - timedelta(days=1)).replace(day=1)
     prox = base.replace(day=ultimo) + timedelta(days=1)
+    linhas = []
+    if visao == "lista":
+        ags = (
+            Agendamento.objects.filter(inicio__gte=ini, inicio__lt=fim, status__in=[Agendamento.Status.AGENDADO, Agendamento.Status.CANCELADO])
+            .select_related("cliente")
+            .order_by("inicio")
+        )
+        dia_atual = None
+        for ag in ags:
+            d = timezone.localdate(ag.inicio)
+            cli = ag.cliente
+            linhas.append({
+                "ag": ag,
+                "nova_dia": d != dia_atual,
+                "data": d,
+                "cancelado": ag.status == Agendamento.Status.CANCELADO,
+                "bl": cli.na_blacklist,
+            })
+            dia_atual = d
     return render(request, "estudio/agenda_mes.html", {
         "semanas": semanas,
+        "linhas": linhas,
+        "visao": visao,
         "titulo": f"{MESES[base.month - 1].capitalize()} {base.year}",
         "anterior": f"{ant.year}-{ant.month:02d}",
         "proxima": f"{prox.year}-{prox.month:02d}",
+        "mes_atual": f"{base.year}-{base.month:02d}",
         "dias": DIAS_CURTOS,
         "aba": "agenda",
     })
@@ -281,24 +325,55 @@ def horarios_json(request):
     })
 
 
+@login_required
+def responsaveis_json(request):
+    data = parse_data(request.GET.get("data"))
+    if not data:
+        return JsonResponse({"usuarios": [], "pode_transferir": False})
+    bloqueados = regras.usuarios_bloqueados_em(data)
+    usuarios = [
+        {"id": u.pk, "nome": u.get_full_name() or u.username, "bloqueado": u.pk in bloqueados}
+        for u in Usuario.objects.filter(is_active=True).order_by("first_name", "username")
+    ]
+    return JsonResponse({"usuarios": usuarios, "pode_transferir": regras.pode_transferir_responsavel(data)})
+
+
 # ---------- agendamentos ----------
+
+def link_whatsapp_numero(numero, texto):
+    if not numero:
+        return ""
+    return f"https://wa.me/{numero}?text={quote(texto)}"
+
 
 def link_whatsapp(contato, texto):
     if not contato or not contato.whatsapp:
         return ""
-    return f"https://wa.me/{contato.whatsapp}?text={quote(texto)}"
+    return link_whatsapp_numero(contato.whatsapp, texto)
+
+
+def primeiro_nome(pessoa):
+    nome = pessoa.get_full_name() if hasattr(pessoa, "get_full_name") else str(pessoa)
+    nome = nome or (pessoa.username if hasattr(pessoa, "username") else str(pessoa))
+    return nome.split()[0] if nome else ""
 
 
 def _resumo(ag):
+    """Sem valor em R$ (o cliente não precisa ver preço no lembrete, só a política de cancelamento)."""
     ini, fim = timezone.localtime(ag.inicio), timezone.localtime(ag.fim)
-    return f"{ag.get_tipo_display().lower()} no Omega Studio {data_extenso(ini.date())}, das {ini:%H}h às {fim:%H}h ({ag.horas}h, {brl(ag.valor_total)})"
+    return f"{ag.get_tipo_display().lower()} no Omega Studio {data_extenso(ini.date())}, das {ini:%H}h às {fim:%H}h ({ag.horas}h)"
+
+
+def _texto_taxa_cancelamento(ag):
+    pct = regras.percentual_taxa(ag.tipo)
+    return f"Cancelamento ou falta com menos de 48h tem taxa de cancelamento de {pct}% do valor do {ag.get_tipo_display().lower()}."
 
 
 def link_whatsapp_confirmacao(ag):
     nome = ag.contato.nome.split()[0] if ag.contato else ""
     texto = (
         f"Olá, {nome}! Seu {_resumo(ag)} está confirmado. 🎸\n"
-        f"Cancelamento ou remarcação sem custo até 48h antes.\n"
+        f"{_texto_taxa_cancelamento(ag)}\n"
         f"Endereço: {ENDERECO}."
     )
     return link_whatsapp(ag.contato, texto)
@@ -306,8 +381,53 @@ def link_whatsapp_confirmacao(ag):
 
 def link_whatsapp_lembrete(ag):
     nome = ag.contato.nome.split()[0] if ag.contato else ""
-    texto = f"Olá, {nome}! Passando para lembrar do seu {_resumo(ag)}. Te esperamos! {ENDERECO}."
+    texto = f"Olá, {nome}! Passando para lembrar do seu {_resumo(ag)}. {_texto_taxa_cancelamento(ag)} Te esperamos! {ENDERECO}."
     return link_whatsapp(ag.contato, texto)
+
+
+def link_whatsapp_lembrete_hoje(ag):
+    """Lembrete do dia (disponível a partir do meio-dia): igual ao lembrete normal, fraseado pro 'hoje'."""
+    nome = ag.contato.nome.split()[0] if ag.contato else ""
+    ini, fim = timezone.localtime(ag.inicio), timezone.localtime(ag.fim)
+    texto = (
+        f"Oi, {nome}! Passando pra lembrar do seu {ag.get_tipo_display().lower()} hoje, "
+        f"das {ini:%H}h às {fim:%H}h, no Omega Studio. {_texto_taxa_cancelamento(ag)} Até já! 🎸"
+    )
+    return link_whatsapp(ag.contato, texto)
+
+
+def link_whatsapp_convite_responsavel(ag):
+    """Avisa quem foi escolhido como responsável (ele toca em Aceitar/Recusar dentro de 'Meu Calendário')."""
+    resp = ag.responsavel
+    if not resp or not resp.telefone:
+        return ""
+    texto = (
+        f"Oi, {primeiro_nome(resp)}! {ag.criado_por} te escolheu pra acompanhar o {_resumo(ag)}.\n"
+        f"Confirme ou recuse no app, em Meu Calendário. Se não responder até 1 dia antes, o convite expira "
+        f"e a responsabilidade volta pra {ag.criado_por}."
+    )
+    return link_whatsapp_numero(resp.telefone, texto)
+
+
+def link_whatsapp_responsavel_aceito(ag):
+    """Avisa quem agendou que a pessoa escolhida aceitou acompanhar."""
+    quem_marcou = ag.criado_por
+    if not quem_marcou or not quem_marcou.telefone:
+        return ""
+    texto = f"Oi, {primeiro_nome(quem_marcou)}! {ag.responsavel} confirmou que vai acompanhar o {_resumo(ag)}. 👍"
+    return link_whatsapp_numero(quem_marcou.telefone, texto)
+
+
+def link_whatsapp_responsavel_recusado(ag, convidado):
+    """Avisa quem agendou que a pessoa escolhida recusou (a responsabilidade já voltou pra quem marcou)."""
+    quem_marcou = ag.criado_por
+    if not quem_marcou or not quem_marcou.telefone:
+        return ""
+    texto = (
+        f"Oi, {primeiro_nome(quem_marcou)}! {convidado} não vai poder acompanhar o {_resumo(ag)}. "
+        f"A responsabilidade voltou pra você."
+    )
+    return link_whatsapp_numero(quem_marcou.telefone, texto)
 
 
 @login_required
@@ -328,6 +448,7 @@ def agendamento_novo(request):
             ag = regras.criar_agendamento(
                 request.user, c["cliente"], c["tipo"], c["data"], c["hora"], c["horas"],
                 confirmar_blacklist=c["confirmar_blacklist"], observacao=c["observacao"],
+                responsavel=c.get("responsavel") or request.user,
             )
         except regras.ClienteNaBlacklist as e:
             return render(request, "estudio/blacklist_alerta.html", _contexto_blacklist(request, e.cliente, form.data))
@@ -337,21 +458,26 @@ def agendamento_novo(request):
             messages.success(request, "Agendamento confirmado.")
             return redirect(reverse("agendamento", args=[ag.pk]) + "?novo=1")
     elif request.method == "POST":
-        erro = "Confira os campos: cliente, tipo, dia, duração e horário."
+        erro = "Confira os campos: cliente, tipo, dia, duração, horário e responsável."
     clientes = Cliente.objects.order_by("nome").only("id", "nome", "blacklist_manual")
     selecionado = None
     cid = form.data.get("cliente") if form.is_bound else inicial["cliente"]
     if cid:
         selecionado = Cliente.objects.filter(pk=cid).first()
+    data_inicial = form.data.get("data") if form.is_bound else inicial["data"]
+    data_obj = parse_data(data_inicial, timezone.localdate())
     return render(request, "estudio/agendamento_form.html", {
         "form": form,
         "erro": erro,
         "clientes": clientes,
         "selecionado": selecionado,
         "valores": {"tipo": form.data.get("tipo") if form.is_bound else inicial["tipo"],
-                    "data": form.data.get("data") if form.is_bound else inicial["data"],
+                    "data": data_inicial,
                     "horas": form.data.get("horas") if form.is_bound else inicial["horas"],
-                    "hora": form.data.get("hora") if form.is_bound else inicial["hora"]},
+                    "hora": form.data.get("hora") if form.is_bound else inicial["hora"],
+                    "responsavel": form.data.get("responsavel") if form.is_bound else str(request.user.pk)},
+        "usuarios": regras.usuarios_disponiveis_para_responsavel(data_obj),
+        "pode_transferir": regras.pode_transferir_responsavel(data_obj),
         "cfg": cfg,
         "aba": "novo",
     })
@@ -387,7 +513,9 @@ def cliente_situacao(request, pk):
 
 @login_required
 def agendamento(request, pk):
-    ag = get_object_or_404(Agendamento.objects.select_related("cliente", "contato", "criado_por"), pk=pk)
+    ag = get_object_or_404(
+        Agendamento.objects.select_related("cliente", "contato", "criado_por", "responsavel"), pk=pk
+    )
     tardio = regras.esta_no_prazo_de_taxa(ag)
     return render(request, "estudio/agendamento.html", {
         "ag": ag,
@@ -401,6 +529,8 @@ def agendamento(request, pk):
         "pode_falta": ag.status == Agendamento.Status.AGENDADO and ag.ja_comecou,
         "whats_confirmacao": link_whatsapp_confirmacao(ag),
         "whats_lembrete": link_whatsapp_lembrete(ag),
+        "whats_convite_responsavel": link_whatsapp_convite_responsavel(ag) if ag.responsavel_pendente else "",
+        "outro_responsavel": ag.responsavel_id and ag.responsavel_id != ag.criado_por_id,
         "novo": request.GET.get("novo") == "1",
         "debitos": ag.debitos.all(),
         "bl": ag.cliente.na_blacklist,
@@ -623,6 +753,107 @@ def debito_quitar(request, pk):
         resto = d.cliente.na_blacklist
         messages.success(request, f"Débito de {brl(d.valor)} quitado." + ("" if resto else f" {d.cliente} saiu da blacklist."))
     return redirect("cliente", pk=d.cliente_id)
+
+
+# ---------- meu calendário (responsável por acompanhar) ----------
+
+@login_required
+def meu_calendario(request):
+    return render(request, "estudio/meu_calendario.html", {
+        "pendentes": regras.convites_pendentes(request.user),
+        "aceitos": regras.responsabilidades_aceitas(request.user),
+        "historico": regras.historico_convites(request.user),
+        "dias_bloqueados": request.user.dias_bloqueados.filter(data__gte=timezone.localdate()).order_by("data"),
+        "aba": "meu_calendario",
+    })
+
+
+@login_required
+@require_POST
+def meu_calendario_responder(request, pk):
+    ag = get_object_or_404(Agendamento.objects.select_related("cliente", "criado_por", "responsavel"), pk=pk)
+    aceitar = request.POST.get("acao") == "aceitar"
+    convidado_antes = ag.responsavel
+    try:
+        ag = regras.responder_convite(request.user, ag, aceitar)
+    except regras.RegraErro as e:
+        messages.error(request, str(e))
+        return redirect("meu_calendario")
+    whats = link_whatsapp_responsavel_aceito(ag) if aceitar else link_whatsapp_responsavel_recusado(ag, convidado_antes)
+    if aceitar:
+        messages.success(request, f"Combinado! Você vai acompanhar o {ag.get_tipo_display().lower()} de {ag.cliente}.")
+    else:
+        messages.warning(request, f"Tudo bem, recusado. A responsabilidade voltou pra {ag.criado_por}.")
+    return render(request, "estudio/meu_calendario_resposta.html", {
+        "ag": ag, "aceitou": aceitar, "whats": whats, "quem_marcou": ag.criado_por, "aba": "meu_calendario",
+    })
+
+
+@login_required
+def dias_indisponiveis(request):
+    hoje = timezone.localdate()
+    if request.method == "POST":
+        d = parse_data(request.POST.get("data"))
+        if d and d >= hoje:
+            if request.user.dias_bloqueados.filter(data=d).exists():
+                regras.desbloquear_dia(request.user, d)
+            else:
+                regras.bloquear_dia(request.user, d)
+        return redirect(reverse("dias_indisponiveis") + f"?m={request.POST.get('m', '')}")
+    try:
+        ano, mes = map(int, request.GET.get("m", "").split("-"))
+        base = date(ano, mes, 1)
+    except ValueError:
+        base = hoje.replace(day=1)
+    ultimo = calendar.monthrange(base.year, base.month)[1]
+    bloqueados = set(request.user.dias_bloqueados.values_list("data", flat=True))
+    semanas = []
+    for semana in calendar.Calendar(firstweekday=0).monthdatescalendar(base.year, base.month):
+        linha = []
+        for d in semana:
+            linha.append({
+                "data": d, "fora": d.month != base.month, "hoje": d == hoje,
+                "passado": d < hoje, "bloqueado": d in bloqueados,
+            })
+        semanas.append(linha)
+    ant = (base - timedelta(days=1)).replace(day=1)
+    prox = base.replace(day=ultimo) + timedelta(days=1)
+    return render(request, "estudio/dias_indisponiveis.html", {
+        "semanas": semanas,
+        "titulo": f"{MESES[base.month - 1].capitalize()} {base.year}",
+        "anterior": f"{ant.year}-{ant.month:02d}",
+        "proxima": f"{prox.year}-{prox.month:02d}",
+        "mes_atual": f"{base.year}-{base.month:02d}",
+        "dias": DIAS_CURTOS,
+        "aba": "meu_calendario",
+    })
+
+
+# ---------- lembretes do dia (meio-dia) ----------
+
+@login_required
+def lembretes_hoje(request):
+    itens = [{
+        "ag": ag,
+        "whats": link_whatsapp_lembrete_hoje(ag),
+        "enviado": ag.lembrete_enviado_em is not None,
+    } for ag in regras.agendamentos_de_hoje_para_lembrar()]
+    agora = timezone.localtime()
+    return render(request, "estudio/lembretes_hoje.html", {
+        "itens": itens,
+        "disponivel": agora.hour >= 12,
+        "agora": agora,
+        "aba": "inicio",
+    })
+
+
+@login_required
+@require_POST
+def lembrete_marcar(request, pk):
+    ag = get_object_or_404(Agendamento, pk=pk)
+    regras.marcar_lembrete_enviado(ag)
+    messages.success(request, f"Lembrete de {ag.cliente} marcado como enviado.")
+    return redirect("lembretes_hoje")
 
 
 # ---------- menu ----------

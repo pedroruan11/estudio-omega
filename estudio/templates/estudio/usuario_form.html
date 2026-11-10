@@ -9,6 +9,7 @@
 {% if form.errors %}<div class="erro" role="alert">{% for f in form %}{% for e in f.errors %}{{ e }}<br>{% endfor %}{% endfor %}{{ form.non_field_errors }}</div>{% endif %}
 <label class="campo">Nome<input type="text" name="first_name" value="{{ form.first_name.value|default:'' }}" required></label>
 {% if novo %}<label class="campo">Usuário (para entrar)<input type="text" name="username" autocapitalize="none" value="{{ form.username.value|default:'' }}" required><small>Sem espaços. Ex.: fabio</small></label>{% endif %}
+<label class="campo">WhatsApp<input type="tel" name="telefone" inputmode="numeric" placeholder="(11) 90000-0000" value="{{ form.telefone.value|default:'' }}"><small>Usado pra mandar o pedido de confirmação quando essa pessoa é escolhida como responsável por um ensaio/gravação.</small></label>
 <fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Perfil</legend>
 <div class="grade2">
 <label class="chip"><input type="radio" name="perfil" value="admin"{% if form.perfil.value == 'admin' %} checked{% endif %}><span>Administrador</span></label>

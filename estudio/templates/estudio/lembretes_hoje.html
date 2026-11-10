@@ -1,0 +1,26 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Lembretes de hoje{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'inicio' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Lembretes de hoje</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:14px">
+{% if not disponivel %}
+<p class="sub" style="margin:0">Os lembretes ficam liberados a partir do meio-dia. Agora são {{ agora|time:"H:i" }}.</p>
+{% else %}
+<p class="sub" style="margin:0">Mande o lembrete no WhatsApp de cada cliente que tem ensaio ou gravação hoje e marque como enviado.</p>
+{% endif %}
+{% for i in itens %}
+<div class="card" style="display:flex;flex-direction:column;gap:10px{% if i.enviado %};opacity:.55{% endif %}">
+<div class="linha"><a href="{% url 'agendamento' i.ag.pk %}" class="titulo-card" style="color:var(--txt);text-decoration:none">{{ i.ag.cliente }}</a>{% if i.enviado %}<span class="pilula ok">Enviado</span>{% else %}<span class="pilula">{{ i.ag.get_tipo_display }}</span>{% endif %}</div>
+<span class="sub" style="font-size:13.5px">{{ i.ag.inicio|time:"H:i" }}–{{ i.ag.fim|time:"H:i" }}{% if i.ag.contato %} · {{ i.ag.contato.whatsapp_formatado }}{% endif %}</span>
+{% if not i.enviado %}
+<div class="grade2">
+<a class="btn ouro pequeno" href="{{ i.whats }}" target="_blank" rel="noopener">Mandar no WhatsApp</a>
+<form method="post" action="{% url 'lembrete_marcar' i.ag.pk %}">{% csrf_token %}<button class="btn pequeno" type="submit">Marcar enviado</button></form>
+</div>
+{% endif %}
+</div>
+{% empty %}<div class="vazio">Nenhum ensaio ou gravação hoje.</div>{% endfor %}
+</main>
+{% endblock %}
