@@ -34,8 +34,8 @@
 <div class="lm-cab"><span>Dia</span><span>Cliente</span><span>Horário</span></div>
 <div class="lm-rolagem">
 {% for l in linhas %}
-<a class="lm-linha{% if l.cancelado %} cancelado{% endif %}" href="{% url 'agendamento' l.ag.pk %}">
-<span class="lm-dia">{% if l.nova_dia %}{{ l.data|date:"d" }}{% endif %}</span>
+<a class="lm-linha{% if l.cancelado %} cancelado{% endif %}{% if l.fds %} fds{% endif %}" href="{% url 'agendamento' l.ag.pk %}">
+<span class="lm-dia">{% if l.nova_dia %}{{ l.data|date:"d" }}<small>{{ l.dia_semana }}</small>{% endif %}</span>
 <span class="lm-cliente">{{ l.ag.cliente }}{% if l.cancelado %}<span class="pilula perigo" style="margin-left:6px">cancelado</span>{% elif l.bl %}<span class="pilula perigo" style="margin-left:6px">blacklist</span>{% endif %}</span>
 <span class="lm-hora">{{ l.ag.inicio|time:"H:i" }}</span>
 </a>

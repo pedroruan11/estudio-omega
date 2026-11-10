@@ -289,6 +289,8 @@ def agenda_mes(request):
                 "ag": ag,
                 "nova_dia": d != dia_atual,
                 "data": d,
+                "dia_semana": DIAS_CURTOS[d.weekday()].capitalize(),
+                "fds": d.weekday() >= 5,
                 "cancelado": ag.status == Agendamento.Status.CANCELADO,
                 "bl": cli.na_blacklist,
             })

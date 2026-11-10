@@ -83,7 +83,10 @@ async function carregarResponsaveis(){
   if(!d){box.innerHTML='';msg.textContent='';return}
   const r=await fetch(`{% url 'responsaveis_json' %}?data=${d}`);const j=await r.json();
   box.innerHTML='';
-  j.usuarios.forEach(u=>{
+  const outros=j.usuarios.filter(u=>String(u.id)!==euId);
+  const eu=j.usuarios.find(u=>String(u.id)===euId);
+  const ordenados=eu?[...outros,eu]:outros;
+  ordenados.forEach(u=>{
     const lab=document.createElement('label');lab.className='chip';
     const desabilitar=u.bloqueado&&String(u.id)!==euId;
     const souEu=String(u.id)===euId;
@@ -91,7 +94,7 @@ async function carregarResponsaveis(){
     const i=document.createElement('input');i.type='radio';i.name='responsavel';i.value=u.id;
     i.disabled=desabilitar||bloqueiaTransferencia;
     if(String(respInicial)===String(u.id)&&!i.disabled)i.checked=true;
-    const s=document.createElement('span');s.textContent=(souEu?'Eu ('+u.nome+')':u.nome)+(u.bloqueado?' · bloqueado':'');
+    const s=document.createElement('span');s.textContent=(souEu?'Eu':u.nome)+(u.bloqueado?' · bloqueado':'');
     lab.append(i,s);box.append(lab)
   });
   if(!f.querySelector('input[name=responsavel]:checked')){const eu=f.querySelector(`input[name=responsavel][value="${euId}"]`);if(eu){eu.checked=true}}
