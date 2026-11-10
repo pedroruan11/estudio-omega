@@ -87,7 +87,7 @@ nav.barra>a{display:flex;flex-direction:column;align-items:center;gap:4px;text-d
 nav.barra>a.on{color:var(--ouro)}
 nav.barra>a .bolinha{position:absolute;top:-2px;right:calc(50% - 15px);width:7px;height:7px;border-radius:50%;background:var(--perigo)}
 @media (min-width:600px){nav.barra{max-width:560px;margin:0 auto;border-left:1px solid var(--linha);border-right:1px solid var(--linha);border-radius:18px 18px 0 0}}
-.fab{position:fixed;right:18px;bottom:calc(var(--nav) + env(safe-area-inset-bottom) - 20px);width:56px;height:56px;border-radius:18px;background:var(--ouro);color:#0A0A0A;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(0,0,0,.5);z-index:11;text-decoration:none}
+.fab{position:fixed;right:20px;bottom:calc(var(--nav) + env(safe-area-inset-bottom) + 14px);width:56px;height:56px;border-radius:18px;background:var(--ouro);color:#0A0A0A;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(0,0,0,.5);z-index:11;text-decoration:none}
 .fab:active{background:var(--ouro2)}
 @media (min-width:600px){.fab{right:max(18px,calc(50% - 280px + 18px))}}
 /* agenda */
@@ -101,6 +101,8 @@ nav.barra>a .bolinha{position:absolute;top:-2px;right:calc(50% - 15px);width:7px
 .segmento{display:flex;background:var(--s1);border:1px solid var(--linha);border-radius:12px;padding:3px}
 .segmento a{min-height:36px;padding:0 14px;border-radius:9px;color:var(--mute);font-weight:600;font-size:13px;text-decoration:none;display:flex;align-items:center}
 .segmento a.on{background:var(--ouro);color:#0A0A0A;font-weight:700}
+.segmento.cheio{width:100%}
+.segmento.cheio a{flex:1;justify-content:center}
 .barra-ocup{height:10px;border-radius:99px;background:var(--s2);overflow:hidden}
 .barra-ocup i{display:block;height:100%;background:var(--ouro)}
 .slot{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:16px;background:var(--s1);border:1px solid var(--linha);text-decoration:none;color:var(--txt)}
