@@ -501,7 +501,9 @@ class ResponsavelTest(Base):
     def test_delegar_responsavel_cria_convite_pendente(self):
         fabio = self._fabio()
         ag = self.agendar(usuario=self.admin, responsavel=fabio)
-        self.assertEqual(ag.responsavel, fabio)
+        # enquanto o convidado não aceita, quem agendou continua responsável
+        self.assertEqual(ag.responsavel, self.admin)
+        self.assertEqual(ag.responsavel_convidado, fabio)
         self.assertTrue(ag.responsavel_pendente)
         self.assertEqual(regras.convites_pendentes(fabio).count(), 1)
 
@@ -522,14 +524,15 @@ class ResponsavelTest(Base):
     def test_responder_convite_aceitar(self):
         fabio = self._fabio()
         ag = self.agendar(usuario=self.admin, responsavel=fabio)
-        ag = regras.responder_convite(fabio, ag, True)
+        ag, _ = regras.responder_convite(fabio, ag, True)
+        self.assertEqual(ag.responsavel, fabio)
         self.assertEqual(ag.responsavel_status, Agendamento.RespStatus.ACEITO)
         self.assertEqual(regras.responsabilidades_aceitas(fabio).count(), 1)
 
     def test_responder_convite_recusar_volta_pro_criador(self):
         fabio = self._fabio()
         ag = self.agendar(usuario=self.admin, responsavel=fabio)
-        ag = regras.responder_convite(fabio, ag, False)
+        ag, _ = regras.responder_convite(fabio, ag, False)
         self.assertEqual(ag.responsavel, self.admin)
         self.assertEqual(regras.historico_convites(fabio).count(), 1)
 
@@ -546,6 +549,110 @@ class ResponsavelTest(Base):
         self.assertIn(self.edicao.pk, regras.usuarios_bloqueados_em(SEG))
         regras.desbloquear_dia(self.edicao, SEG)
         self.assertNotIn(self.edicao.pk, regras.usuarios_bloqueados_em(SEG))
+
+
+class TrocaResponsavelTest(Base):
+    """Regra de 12/11/2026: quem agendou ou o responsável atual pode passar pra outro técnico;
+    o novo precisa aceitar, senão continua o atual."""
+
+    def setUp(self):
+        super().setUp()
+        self.dudu = Usuario.objects.create_user("dudu", password="x", perfil=Usuario.Perfil.EDICAO)
+        self.fabio = Usuario.objects.create_user("fabio", password="x", perfil=Usuario.Perfil.ADMIN)
+        self.ag = self.agendar(usuario=self.admin, responsavel=self.dudu)
+        self.ag, _ = regras.responder_convite(self.dudu, self.ag, True)
+
+    def test_pedido_recusado_ou_pendente_aparece_no_meu_calendario(self):
+        outro = self.agendar(usuario=self.admin, hora=21, horas=2, responsavel=self.fabio)
+        self.assertIn(outro, regras.responsabilidades_aceitas(self.admin, agora=ANTES))
+        regras.responder_convite(self.fabio, outro, False)
+        self.assertIn(outro, regras.responsabilidades_aceitas(self.admin, agora=ANTES))
+        self.assertNotIn(outro, regras.responsabilidades_aceitas(self.fabio, agora=ANTES))
+
+    def test_proprio_agendamento_aparece_no_meu_calendario(self):
+        meu = self.agendar(usuario=self.edicao, hora=21, horas=2)
+        self.assertIn(meu, regras.responsabilidades_aceitas(self.edicao, agora=ANTES))
+
+    def test_responsavel_passa_pra_outro_e_continua_ate_aceitar(self):
+        regras.trocar_responsavel(self.dudu, self.ag, self.fabio, agora=ANTES)
+        self.ag.refresh_from_db()
+        self.assertEqual(self.ag.responsavel, self.dudu)
+        self.assertEqual(self.ag.responsavel_convidado, self.fabio)
+        self.assertIn(self.ag, regras.responsabilidades_aceitas(self.dudu, agora=ANTES))
+        self.assertEqual(regras.convites_pendentes(self.fabio).count(), 1)
+        ag, convite = regras.responder_convite(self.fabio, self.ag, True)
+        self.assertEqual(ag.responsavel, self.fabio)
+        self.assertEqual(convite.convidado_por, self.dudu)
+        self.assertIsNone(ag.responsavel_convidado)
+
+    def test_novo_recusa_continua_o_atual(self):
+        regras.trocar_responsavel(self.dudu, self.ag, self.fabio, agora=ANTES)
+        ag, _ = regras.responder_convite(self.fabio, self.ag, False)
+        self.assertEqual(ag.responsavel, self.dudu)
+        self.assertFalse(ag.responsavel_pendente)
+
+    def test_expira_continua_o_atual_e_avisa_quem_convidou(self):
+        regras.trocar_responsavel(self.dudu, self.ag, self.fabio, agora=ANTES)
+        expirados = regras.expirar_convites_pendentes(agora=self.ag.inicio - timedelta(hours=1))
+        self.assertEqual(len(expirados), 1)
+        ag, convidado, quem_convidou = expirados[0]
+        self.assertEqual((ag.responsavel, convidado, quem_convidou), (self.dudu, self.fabio, self.dudu))
+
+    def test_quem_agendou_tambem_pode_trocar(self):
+        regras.trocar_responsavel(self.admin, self.ag, self.fabio, agora=ANTES)
+        self.assertEqual(Agendamento.objects.get(pk=self.ag.pk).responsavel_convidado, self.fabio)
+
+    def test_terceiro_nao_pode_trocar(self):
+        with self.assertRaises(regras.SemPermissao):
+            regras.trocar_responsavel(self.fabio, self.ag, self.edicao, agora=ANTES)
+
+    def test_nao_troca_no_mesmo_dia(self):
+        with self.assertRaises(regras.RegraErro):
+            regras.trocar_responsavel(self.dudu, self.ag, self.fabio, agora=regras.inicio_em(SEG, 10))
+
+    def test_status_na_tela_que_direcionei(self):
+        regras.trocar_responsavel(self.dudu, self.ag, self.fabio, agora=ANTES)
+        self.assertEqual(regras.convites_enviados(self.admin, agora=ANTES).count(), 1)  # o do Dudu, aceito
+        self.assertEqual(regras.convites_enviados(self.dudu, agora=ANTES).count(), 1)  # o do Fábio, pendente
+
+    def test_telas(self):
+        self.client.force_login(self.dudu)
+        r = self.client.get(reverse("agendamento", args=[self.ag.pk]))
+        self.assertContains(r, "Quem acompanha")
+        self.assertContains(r, "Passar pra outro técnico")
+        self.assertContains(r, "Mandar mensagem")
+        self.assertNotContains(r, "<span>Tipo</span>")
+        self.assertEqual(self.client.get(reverse("agendamento_responsavel", args=[self.ag.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("meus_direcionamentos")).status_code, 200)
+        self.client.force_login(self.fabio)
+        r = self.client.get(reverse("agendamento", args=[self.ag.pk]))
+        self.assertNotContains(r, "Passar pra outro técnico")
+        r = self.client.post(reverse("agendamento_responsavel", args=[self.ag.pk]), {"responsavel": self.fabio.pk})
+        self.assertEqual(Agendamento.objects.get(pk=self.ag.pk).responsavel_convidado, None)
+
+
+class VarinhaTest(Base):
+    def test_texto_horarios_livres(self):
+        self.agendar(data=SEG, hora=18, horas=2)
+        agora = regras.inicio_em(SEG, 9)
+        janelas = dict(regras.janelas_livres(3, agora=agora))
+        self.assertEqual(janelas[SEG], [(20, 24)])
+        texto = regras.texto_horarios_disponiveis(3, agora=agora)
+        self.assertIn("Seg 07/01:* 20h às 00h", texto)
+        self.assertIn("Ter 08/01:* 18h às 00h", texto)
+
+    def test_varinha_na_agenda(self):
+        self.client.force_login(self.edicao)
+        for nome in ("agenda", "agenda_mes"):
+            r = self.client.get(reverse(nome))
+            self.assertContains(r, "btn-varinha")
+            self.assertContains(r, "horários disponíveis")
+
+    def test_inicio_sem_botao_de_lembrete(self):
+        hoje = timezone.localdate()
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("inicio"))
+        self.assertNotContains(r, "Lembrete no WhatsApp")
 
 
 class TelasNovasTest(Base):

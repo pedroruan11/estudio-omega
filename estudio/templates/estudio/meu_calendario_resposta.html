@@ -9,9 +9,9 @@
 <div class="linha"><span class="titulo-card">{{ ag.cliente }}</span><span class="pilula{% if not aceitou %} perigo{% endif %}">{{ ag.get_tipo_display }}</span></div>
 <span class="sub" style="font-size:13.5px">{{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }}</span>
 {% if aceitou %}
-<p class="sub" style="margin:0">Você vai acompanhar esse {{ ag.get_tipo_display|lower }}. {{ quem_marcou }} foi avisado que você aceitou.</p>
+<p class="sub" style="margin:0">Você vai acompanhar esse {{ ag.get_tipo_display|lower }}. Agora o responsável é você. Avise {{ quem_marcou }} que você aceitou.</p>
 {% else %}
-<p class="sub" style="margin:0">Tudo bem, a responsabilidade voltou pra {{ quem_marcou }}, que já foi avisado.</p>
+<p class="sub" style="margin:0">Tudo bem. {{ ag.responsavel }} continua como responsável. Avise {{ quem_marcou }} que você não vai poder.</p>
 {% endif %}
 </div>
 {% if whats %}

@@ -271,6 +271,12 @@ class Agendamento(models.Model):
         max_length=10, choices=RespStatus.choices, default=RespStatus.ACEITO, db_index=True,
     )
     responsavel_definido_em = models.DateTimeField(null=True, blank=True)
+    # Quem foi convidado e ainda não respondeu. Enquanto isso, `responsavel` continua sendo
+    # quem atende de fato (se o convidado recusar ou não responder, nada muda).
+    responsavel_convidado = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="convites_em_aberto",
+        help_text="Convidado pra assumir o acompanhamento, aguardando resposta.",
+    )
     lembrete_enviado_em = models.DateTimeField(null=True, blank=True, help_text="Quando alguém da equipe marcou o lembrete do dia como enviado.")
 
     objects = AgendamentoQuerySet.as_manager()
@@ -301,6 +307,11 @@ class Agendamento(models.Model):
     @property
     def responsavel_pendente(self):
         return self.responsavel_status == self.RespStatus.PENDENTE
+
+    def pode_trocar_responsavel(self, usuario):
+        """Quem fez o agendamento ou quem está acompanhando hoje pode passar pra outra pessoa
+        (regra do Pedro, 12/11/2026)."""
+        return usuario.pk in (self.criado_por_id, self.responsavel_id)
 
 
 class ConviteResponsavel(models.Model):

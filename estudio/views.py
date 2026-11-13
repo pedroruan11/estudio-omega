@@ -35,6 +35,7 @@ DIAS_CURTOS = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"]
 DIAS_LONGOS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
 ENDERECO = "Av. dos Autonomistas, 4905, sala 7 – Osasco"
+DIAS_DISPONIVEIS = 20  # varinha mágica da Agenda: horários livres dos próximos 20 dias
 
 
 def brl(valor):
@@ -53,6 +54,12 @@ def admin_required(view):
         return view(request, *args, **kwargs)
 
     return login_required(wrapper)
+
+
+def nome_usuario(u):
+    if not u:
+        return ""
+    return u.get_full_name() or u.username
 
 
 def texto_janela(janela):
@@ -156,15 +163,16 @@ def _faixas_contexto(data):
         f["ini"] = timezone.localtime(f["inicio"])
         f["fim_l"] = timezone.localtime(f["fim"])
         if not f["livre"]:
-            f["whats"] = link_whatsapp_lembrete(f["ag"])
             cli = f["ag"].cliente
             multa = cli.total_em_aberto()
             f["bl"] = cli.blacklist_manual or multa > 0
             f["multa"] = brl(multa) if multa > 0 else ""
             ag = f["ag"]
             if ag.responsavel_id and ag.responsavel_id != ag.criado_por_id:
-                f["resp_nome"] = ag.responsavel.get_full_name() or ag.responsavel.username
-                f["resp_pendente"] = ag.responsavel_pendente
+                f["resp_nome"] = nome_usuario(ag.responsavel)
+            if ag.responsavel_pendente and ag.responsavel_convidado_id:
+                f["resp_nome"] = nome_usuario(ag.responsavel) if ag.responsavel_id else "—"
+                f["resp_convidado"] = nome_usuario(ag.responsavel_convidado)
     return faixas
 
 
@@ -175,13 +183,14 @@ def _expirar_convites_e_avisar(request):
         expirados = regras.expirar_convites_pendentes()
     except Exception:
         return
-    for ag, convidado in expirados:
-        if ag.criado_por_id == request.user.pk:
-            nome = convidado.get_full_name() or convidado.username if convidado else "a pessoa escolhida"
+    for ag, convidado, quem_convidou in expirados:
+        if quem_convidou and quem_convidou.pk == request.user.pk:
+            nome = nome_usuario(convidado) if convidado else "a pessoa escolhida"
+            quem_fica = "Você continua" if ag.responsavel_id == request.user.pk else f"{nome_usuario(ag.responsavel)} continua"
             messages.info(
                 request,
                 f"O pedido pra {nome} acompanhar o {ag.get_tipo_display().lower()} de {ag.cliente} "
-                f"({timezone.localtime(ag.inicio):%d/%m %H:%M}) expirou sem resposta. Você voltou a ser o responsável.",
+                f"({timezone.localtime(ag.inicio):%d/%m %H:%M}) expirou sem resposta. {quem_fica} como responsável.",
             )
 
 
@@ -238,6 +247,7 @@ def agenda(request):
         "anterior": (seg - timedelta(days=7)).isoformat(),
         "proxima": (seg + timedelta(days=7)).isoformat(),
         "faixas": _faixas_contexto(dia),
+        "texto_disponiveis": regras.texto_horarios_disponiveis(DIAS_DISPONIVEIS),
         "janela_txt": texto_janela(janela),
         "pct": int(usadas * 100 / total) if total else 0,
         "usadas": usadas,
@@ -304,6 +314,7 @@ def agenda_mes(request):
         "proxima": f"{prox.year}-{prox.month:02d}",
         "mes_atual": f"{base.year}-{base.month:02d}",
         "dias": DIAS_CURTOS,
+        "texto_disponiveis": regras.texto_horarios_disponiveis(DIAS_DISPONIVEIS),
         "aba": "agenda",
     })
 
@@ -398,38 +409,46 @@ def link_whatsapp_lembrete_hoje(ag):
     return link_whatsapp(ag.contato, texto)
 
 
-def link_whatsapp_convite_responsavel(ag):
-    """Avisa quem foi escolhido como responsável (ele toca em Aceitar/Recusar dentro de 'Meu Calendário')."""
-    resp = ag.responsavel
-    if not resp or not resp.telefone:
+def link_whatsapp_mensagem(ag):
+    """Abre a conversa com o contato do cliente, só com um 'Olá' (pra mandar qualquer recado)."""
+    nome = ag.contato.nome.split()[0] if ag.contato else ""
+    return link_whatsapp(ag.contato, f"Olá, {nome}! Aqui é do Omega Studio. ")
+
+
+def link_whatsapp_convite_responsavel(ag, quem_convidou=None):
+    """Avisa quem foi convidado pra acompanhar (ele toca em Aceitar/Recusar dentro de 'Meu Calendário')."""
+    convidado = ag.responsavel_convidado
+    if not convidado or not convidado.telefone:
         return ""
+    quem = quem_convidou or ag.criado_por
+    atual = ag.responsavel
+    fica = "continua comigo" if atual and quem and atual.pk == quem.pk else f"continua com {atual}"
     texto = (
-        f"Oi, {primeiro_nome(resp)}! {ag.criado_por} te escolheu pra acompanhar o {_resumo(ag)}.\n"
-        f"Confirme ou recuse no app, em Meu Calendário. Se não responder até 1 dia antes, o convite expira "
-        f"e a responsabilidade volta pra {ag.criado_por}."
+        f"Oi, {primeiro_nome(convidado)}! {quem} te escolheu pra acompanhar o {_resumo(ag)} ({ag.cliente}).\n"
+        f"Confirme ou recuse no app, em Meu Calendário. Enquanto você não aceitar, a responsabilidade {fica}; "
+        f"se não responder até 1 dia antes, o convite expira."
     )
-    return link_whatsapp_numero(resp.telefone, texto)
+    return link_whatsapp_numero(convidado.telefone, texto)
 
 
-def link_whatsapp_responsavel_aceito(ag):
-    """Avisa quem agendou que a pessoa escolhida aceitou acompanhar."""
-    quem_marcou = ag.criado_por
-    if not quem_marcou or not quem_marcou.telefone:
+def link_whatsapp_responsavel_aceito(ag, avisar):
+    """Avisa quem convidou que a pessoa escolhida aceitou acompanhar."""
+    if not avisar or not avisar.telefone:
         return ""
-    texto = f"Oi, {primeiro_nome(quem_marcou)}! {ag.responsavel} confirmou que vai acompanhar o {_resumo(ag)}. 👍"
-    return link_whatsapp_numero(quem_marcou.telefone, texto)
+    texto = f"Oi, {primeiro_nome(avisar)}! {ag.responsavel} confirmou que vai acompanhar o {_resumo(ag)} ({ag.cliente}). 👍"
+    return link_whatsapp_numero(avisar.telefone, texto)
 
 
-def link_whatsapp_responsavel_recusado(ag, convidado):
-    """Avisa quem agendou que a pessoa escolhida recusou (a responsabilidade já voltou pra quem marcou)."""
-    quem_marcou = ag.criado_por
-    if not quem_marcou or not quem_marcou.telefone:
+def link_whatsapp_responsavel_recusado(ag, convidado, avisar):
+    """Avisa quem convidou que a pessoa escolhida recusou (o responsável atual continua)."""
+    if not avisar or not avisar.telefone:
         return ""
+    fica = "continua com você" if ag.responsavel_id == avisar.pk else f"continua com {ag.responsavel}"
     texto = (
-        f"Oi, {primeiro_nome(quem_marcou)}! {convidado} não vai poder acompanhar o {_resumo(ag)}. "
-        f"A responsabilidade voltou pra você."
+        f"Oi, {primeiro_nome(avisar)}! {convidado} não vai poder acompanhar o {_resumo(ag)} ({ag.cliente}). "
+        f"A responsabilidade {fica}."
     )
-    return link_whatsapp_numero(quem_marcou.telefone, texto)
+    return link_whatsapp_numero(avisar.telefone, texto)
 
 
 @login_required
@@ -516,9 +535,11 @@ def cliente_situacao(request, pk):
 @login_required
 def agendamento(request, pk):
     ag = get_object_or_404(
-        Agendamento.objects.select_related("cliente", "contato", "criado_por", "responsavel"), pk=pk
+        Agendamento.objects.select_related("cliente", "contato", "criado_por", "responsavel", "responsavel_convidado"), pk=pk
     )
     tardio = regras.esta_no_prazo_de_taxa(ag)
+    convite = ag.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE).select_related("convidado_por").first()
+    quem_convidou = convite.convidado_por if convite else ag.criado_por
     return render(request, "estudio/agendamento.html", {
         "ag": ag,
         "ini": timezone.localtime(ag.inicio),
@@ -531,8 +552,13 @@ def agendamento(request, pk):
         "pode_falta": ag.status == Agendamento.Status.AGENDADO and ag.ja_comecou,
         "whats_confirmacao": link_whatsapp_confirmacao(ag),
         "whats_lembrete": link_whatsapp_lembrete(ag),
-        "whats_convite_responsavel": link_whatsapp_convite_responsavel(ag) if ag.responsavel_pendente else "",
-        "outro_responsavel": ag.responsavel_id and ag.responsavel_id != ag.criado_por_id,
+        "whats_mensagem": link_whatsapp_mensagem(ag),
+        "whats_convite_responsavel": (
+            link_whatsapp_convite_responsavel(ag, quem_convidou)
+            if ag.responsavel_pendente and quem_convidou and quem_convidou.pk == request.user.pk else ""
+        ),
+        "quem_convidou": quem_convidou,
+        "pode_trocar_responsavel": ag.status == Agendamento.Status.AGENDADO and ag.pode_trocar_responsavel(request.user),
         "novo": request.GET.get("novo") == "1",
         "debitos": ag.debitos.all(),
         "bl": ag.cliente.na_blacklist,
@@ -765,6 +791,7 @@ def meu_calendario(request):
         "pendentes": regras.convites_pendentes(request.user),
         "aceitos": regras.responsabilidades_aceitas(request.user),
         "historico": regras.historico_convites(request.user),
+        "enviados_pendentes": regras.convites_enviados(request.user).filter(status=Agendamento.RespStatus.PENDENTE).count(),
         "dias_bloqueados": request.user.dias_bloqueados.filter(data__gte=timezone.localdate()).order_by("data"),
         "aba": "meu_calendario",
     })
@@ -775,19 +802,84 @@ def meu_calendario(request):
 def meu_calendario_responder(request, pk):
     ag = get_object_or_404(Agendamento.objects.select_related("cliente", "criado_por", "responsavel"), pk=pk)
     aceitar = request.POST.get("acao") == "aceitar"
-    convidado_antes = ag.responsavel
     try:
-        ag = regras.responder_convite(request.user, ag, aceitar)
+        ag, convite = regras.responder_convite(request.user, ag, aceitar)
     except regras.RegraErro as e:
         messages.error(request, str(e))
         return redirect("meu_calendario")
-    whats = link_whatsapp_responsavel_aceito(ag) if aceitar else link_whatsapp_responsavel_recusado(ag, convidado_antes)
+    avisar = (convite.convidado_por if convite else None) or ag.criado_por
+    whats = (
+        link_whatsapp_responsavel_aceito(ag, avisar) if aceitar
+        else link_whatsapp_responsavel_recusado(ag, request.user, avisar)
+    )
     if aceitar:
         messages.success(request, f"Combinado! Você vai acompanhar o {ag.get_tipo_display().lower()} de {ag.cliente}.")
     else:
-        messages.warning(request, f"Tudo bem, recusado. A responsabilidade voltou pra {ag.criado_por}.")
+        messages.warning(request, f"Tudo bem, recusado. {ag.responsavel} continua como responsável.")
     return render(request, "estudio/meu_calendario_resposta.html", {
-        "ag": ag, "aceitou": aceitar, "whats": whats, "quem_marcou": ag.criado_por, "aba": "meu_calendario",
+        "ag": ag, "aceitou": aceitar, "whats": whats, "quem_marcou": avisar, "aba": "meu_calendario",
+    })
+
+
+@login_required
+def meus_direcionamentos(request):
+    """Agendamentos que eu direcionei pra outra pessoa acompanhar, com o status de cada convite."""
+    agora = timezone.now()
+    itens = []
+    for c in regras.convites_enviados(request.user, agora):
+        ag = c.agendamento
+        if c.status == Agendamento.RespStatus.PENDENTE:
+            situacao = "Aguardando resposta"
+        elif c.status == Agendamento.RespStatus.ACEITO:
+            situacao = "Aceito"
+        elif c.status == Agendamento.RespStatus.RECUSADO:
+            situacao = "Recusado"
+        else:
+            situacao = "Expirado / cancelado"
+        quem_atende = "você" if ag.responsavel_id == request.user.pk else nome_usuario(ag.responsavel)
+        itens.append({"c": c, "ag": ag, "situacao": situacao, "quem_atende": quem_atende,
+                      "sou_eu": ag.responsavel_id == request.user.pk})
+    return render(request, "estudio/meus_direcionamentos.html", {"itens": itens, "aba": "meu_calendario"})
+
+
+@login_required
+def agendamento_responsavel(request, pk):
+    """Trocar quem acompanha (só quem agendou ou o responsável atual). O novo precisa aceitar."""
+    ag = get_object_or_404(
+        Agendamento.objects.select_related("cliente", "criado_por", "responsavel", "responsavel_convidado"), pk=pk
+    )
+    if not ag.pode_trocar_responsavel(request.user):
+        messages.error(request, "Só quem fez o agendamento ou quem está acompanhando pode trocar o responsável.")
+        return redirect("agendamento", pk=pk)
+    data = timezone.localdate(ag.inicio)
+    if request.method == "POST":
+        try:
+            if request.POST.get("acao") == "cancelar_convite":
+                regras.cancelar_convite(request.user, ag)
+                messages.success(request, f"Convite cancelado. {ag.responsavel} continua como responsável.")
+            else:
+                novo = Usuario.objects.filter(pk=request.POST.get("responsavel") or 0, is_active=True).first()
+                regras.trocar_responsavel(request.user, ag, novo)
+                messages.success(
+                    request,
+                    f"Convite enviado pra {nome_usuario(novo)}. Até ele aceitar, {ag.responsavel} continua responsável. "
+                    f"Toque no botão dourado pra avisar no WhatsApp.",
+                )
+        except regras.RegraErro as e:
+            messages.error(request, str(e))
+        return redirect("agendamento", pk=pk)
+    bloqueados = regras.usuarios_bloqueados_em(data)
+    usuarios = [
+        {"u": u, "bloqueado": u.pk in bloqueados, "atual": u.pk == ag.responsavel_id}
+        for u in Usuario.objects.filter(is_active=True).order_by("first_name", "username")
+    ]
+    return render(request, "estudio/agendamento_responsavel.html", {
+        "ag": ag,
+        "ini": timezone.localtime(ag.inicio),
+        "fim": timezone.localtime(ag.fim),
+        "dia": data_extenso(data),
+        "usuarios": usuarios,
+        "pode_transferir": regras.pode_transferir_responsavel(data),
     })
 
 

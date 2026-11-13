@@ -1,0 +1,20 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Agendamentos que direcionei{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Que direcionei</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:14px">
+<p class="sub" style="margin:0;font-size:13px">Ensaios e gravações que você pediu pra outra pessoa acompanhar. Se ela recusar ou não responder, quem atende é você — e o compromisso já aparece em Meu Calendário.</p>
+<div class="lista">
+{% for i in itens %}
+<a class="item" href="{% url 'agendamento' i.ag.pk %}">
+<span style="flex:1"><b>{{ i.ag.cliente }}</b><br>
+<span class="sub" style="font-size:13px">{{ i.ag.get_tipo_display }} · {{ i.ag.inicio|date:"d/m" }} às {{ i.ag.inicio|time:"H:i" }} · pra {{ i.c.convidado }}</span><br>
+<span style="font-size:12.5px;{% if i.sou_eu %}color:var(--ouro);font-weight:600{% else %}color:var(--txt2){% endif %}">Quem atende: {{ i.quem_atende }}</span></span>
+<span class="pilula{% if i.c.status == 'recusado' %} perigo{% elif i.c.status == 'expirado' %} cinza{% elif i.c.status == 'aceito' %} ok{% endif %}">{{ i.situacao }}</span>
+</a>
+{% empty %}<div class="vazio">Você ainda não direcionou nenhum ensaio ou gravação pra outra pessoa.</div>{% endfor %}
+</div>
+</main>
+{% endblock %}

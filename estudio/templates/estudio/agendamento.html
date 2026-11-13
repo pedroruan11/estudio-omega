@@ -36,19 +36,22 @@
 <div class="dados">
 <div><span>Dia</span><span>{{ dia }}</span></div>
 <div><span>Horário</span><span>{{ ini|time:"H:i" }} às {{ fim|time:"H:i" }} ({{ ag.horas }}h)</span></div>
-<div><span>Tipo</span><span>{{ ag.get_tipo_display }}</span></div>
 <div><span>Valor</span><span>{{ valor }}</span></div>
 {% if ag.contato %}<div><span>Contato</span><span>{{ ag.contato.nome }} · {{ ag.contato.whatsapp_formatado }}</span></div>{% endif %}
 {% if ag.observacao %}<div><span>Observação</span><span>{{ ag.observacao }}</span></div>{% endif %}
-{% if outro_responsavel %}<div><span>Responsável</span><span>{{ ag.responsavel }}{% if ag.responsavel_pendente %} · <span class="pilula">Aguardando confirmação</span>{% endif %}</span></div>{% endif %}
+<div><span>Quem acompanha</span><span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right"><b>{{ ag.responsavel|default:ag.criado_por|default:"—" }}</b>{% if ag.responsavel_pendente and ag.responsavel_convidado %}<span class="pilula">Aguardando {{ ag.responsavel_convidado }}</span>{% endif %}</span></div>
 <div><span>Agendado por</span><span>{{ ag.criado_por|default:"—" }} · {{ ag.criado_em|date:"d/m H:i" }}</span></div>
 {% if ag.remarcacoes %}<div><span>Remarcações</span><span>{{ ag.remarcacoes }}</span></div>{% endif %}
 </div>
 </div>
 {% for d in debitos %}<div class="card perigo"><span style="font-size:14px"><b>{{ d.get_motivo_display }}</b> · R$ {{ d.valor|floatformat:2 }} · {% if d.aberto %}em aberto{% else %}quitado em {{ d.quitado_em|date:"d/m" }}{% endif %}</span></div>{% endfor %}
 {% if ativo %}
-{% if whats_convite_responsavel %}<a class="btn ouro" href="{{ whats_convite_responsavel }}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg>Convidar {{ ag.responsavel }} no WhatsApp</a>{% endif %}
-{% if whats_lembrete %}<a class="btn" href="{{ whats_lembrete }}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg>Lembrete no WhatsApp</a>{% endif %}
+{% if whats_convite_responsavel %}<a class="btn ouro" href="{{ whats_convite_responsavel }}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg>Avisar {{ ag.responsavel_convidado }} no WhatsApp</a>{% endif %}
+{% if pode_trocar_responsavel %}<a class="btn" href="{% url 'agendamento_responsavel' ag.pk %}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"/></svg>{% if ag.responsavel_pendente %}Ver / trocar convite de responsável{% else %}Passar pra outro técnico{% endif %}</a>{% endif %}
+{% if whats_lembrete or whats_mensagem %}<div class="grade2">
+{% if whats_lembrete %}<a class="btn" href="{{ whats_lembrete }}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg>Lembrete</a>{% endif %}
+{% if whats_mensagem %}<a class="btn" href="{{ whats_mensagem }}" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v12H8l-4 4z"/></svg>Mandar mensagem</a>{% endif %}
+</div>{% endif %}
 <div class="grade2">
 {% if pode_remarcar %}<a class="btn" href="{% url 'agendamento_remarcar' ag.pk %}">Remarcar</a>{% else %}<span class="btn" style="opacity:.5" title="Só administrador">Remarcar</span>{% endif %}
 <a class="btn perigo" href="{% url 'agendamento_cancelar' ag.pk %}">Cancelar</a>

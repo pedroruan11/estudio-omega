@@ -126,7 +126,7 @@ def faixas_do_dia(data):
     abre, fecha = janela
     ini_dia, fim_dia = inicio_em(data, abre), inicio_em(data, 0) + timedelta(hours=fecha)
     ags = list(
-        Agendamento.objects.no_intervalo(ini_dia, fim_dia).select_related("cliente", "contato").order_by("inicio")
+        Agendamento.objects.no_intervalo(ini_dia, fim_dia).select_related("cliente", "contato", "responsavel", "responsavel_convidado").order_by("inicio")
     )
     faixas, cursor = [], ini_dia
     for ag in ags:
@@ -198,6 +198,7 @@ def criar_agendamento(
         cfg = _travar()
         inicio = _checar_horario(data, hora, horas, tipo, agora=agora)
         pendente = responsavel.pk != usuario.pk
+        # Enquanto o convidado não aceita, quem agendou continua sendo o responsável de fato.
         ag = Agendamento.objects.create(
             cliente=cliente,
             contato=contato or cliente.contato_principal,
@@ -207,7 +208,8 @@ def criar_agendamento(
             valor_hora=preco_hora(tipo, cfg),
             criado_por=usuario,
             observacao=observacao,
-            responsavel=responsavel,
+            responsavel=usuario,
+            responsavel_convidado=responsavel if pendente else None,
             responsavel_status=Agendamento.RespStatus.PENDENTE if pendente else Agendamento.RespStatus.ACEITO,
             responsavel_definido_em=agora,
         )
@@ -378,23 +380,30 @@ def multa_nao_paga(usuario, ag):
 
 
 # ---------- responsável por acompanhar ----------
+#
+# `responsavel` é sempre quem vai atender de fato. Um convite em aberto fica em
+# `responsavel_convidado` (status PENDENTE): se for aceito, o convidado vira o responsável;
+# se for recusado ou expirar, nada muda e o responsável atual continua (regra do Pedro, 12/11/2026).
 
 def convites_pendentes(usuario):
+    """Convites que esse usuário recebeu e ainda não respondeu."""
     return (
         Agendamento.objects.ativos()
-        .filter(responsavel=usuario, responsavel_status=Agendamento.RespStatus.PENDENTE)
-        .select_related("cliente", "criado_por")
+        .filter(responsavel_convidado=usuario, responsavel_status=Agendamento.RespStatus.PENDENTE)
+        .select_related("cliente", "responsavel", "criado_por")
         .order_by("inicio")
     )
 
 
 def responsabilidades_aceitas(usuario, agora=None):
+    """Tudo o que esse usuário vai acompanhar daqui pra frente: inclusive os que ele mesmo agendou,
+    os convites que ele mandou e ainda não foram aceitos e os que foram recusados/expiraram
+    (nesses casos quem atende é ele)."""
     agora = agora or timezone.now()
     return (
         Agendamento.objects.ativos()
-        .filter(responsavel=usuario, responsavel_status=Agendamento.RespStatus.ACEITO, inicio__gte=agora)
-        .exclude(criado_por=usuario)
-        .select_related("cliente")
+        .filter(responsavel=usuario, fim__gte=agora)
+        .select_related("cliente", "responsavel_convidado")
         .order_by("inicio")
     )
 
@@ -409,54 +418,113 @@ def historico_convites(usuario, limite=10):
     )
 
 
-def responder_convite(usuario, ag, aceitar, agora=None):
+def convites_enviados(usuario, agora=None):
+    """Convites que esse usuário mandou pra outra pessoa acompanhar (só de ensaios/gravações que
+    ainda vão acontecer), com o status de cada um. Tela 'Agendamentos que direcionei'."""
     agora = agora or timezone.now()
-    if ag.responsavel_id != usuario.pk or ag.responsavel_status != Agendamento.RespStatus.PENDENTE:
+    return (
+        ConviteResponsavel.objects.filter(
+            convidado_por=usuario,
+            agendamento__status=Agendamento.Status.AGENDADO,
+            agendamento__fim__gte=agora,
+        )
+        .select_related("agendamento", "agendamento__cliente", "agendamento__responsavel", "convidado")
+        .order_by("agendamento__inicio", "-criado_em")
+    )
+
+
+def _fechar_convite(ag, status, agora):
+    convite = (
+        ag.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE, convidado_id=ag.responsavel_convidado_id)
+        .order_by("-criado_em").first()
+    )
+    if convite:
+        convite.status = status
+        convite.respondido_em = agora
+        convite.save(update_fields=["status", "respondido_em"])
+    # convites antigos que tenham ficado pendurados
+    ag.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE).update(status=status, respondido_em=agora)
+    return convite
+
+
+def responder_convite(usuario, ag, aceitar, agora=None):
+    """Retorna (agendamento, convite)."""
+    agora = agora or timezone.now()
+    if ag.responsavel_convidado_id != usuario.pk or ag.responsavel_status != Agendamento.RespStatus.PENDENTE:
         raise RegraErro("Esse convite não está mais disponível pra você responder.")
-    convite = ag.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE).order_by("-criado_em").first()
     with transaction.atomic():
+        convite = _fechar_convite(ag, Agendamento.RespStatus.ACEITO if aceitar else Agendamento.RespStatus.RECUSADO, agora)
         if aceitar:
-            ag.responsavel_status = Agendamento.RespStatus.ACEITO
-            ag.save(update_fields=["responsavel_status"])
-            if convite:
-                convite.status = Agendamento.RespStatus.ACEITO
-                convite.respondido_em = agora
-                convite.save(update_fields=["status", "respondido_em"])
-        else:
-            ag.responsavel = ag.criado_por
-            ag.responsavel_status = Agendamento.RespStatus.ACEITO
+            ag.responsavel = usuario
             ag.responsavel_definido_em = agora
-            ag.save(update_fields=["responsavel", "responsavel_status", "responsavel_definido_em"])
-            if convite:
-                convite.status = Agendamento.RespStatus.RECUSADO
-                convite.respondido_em = agora
-                convite.save(update_fields=["status", "respondido_em"])
+        ag.responsavel_convidado = None
+        ag.responsavel_status = Agendamento.RespStatus.ACEITO
+        ag.save(update_fields=["responsavel", "responsavel_convidado", "responsavel_status", "responsavel_definido_em"])
+    return ag, convite
+
+
+def trocar_responsavel(usuario, ag, novo, agora=None):
+    """Passa o acompanhamento pra outra pessoa. Só quem agendou ou o responsável atual podem.
+    O novo precisa aceitar no app; até lá (e se recusar ou não responder) continua o atual."""
+    agora = agora or timezone.now()
+    if ag.status != Agendamento.Status.AGENDADO:
+        raise RegraErro("Esse agendamento não está ativo.")
+    if not ag.pode_trocar_responsavel(usuario):
+        raise SemPermissao("Só quem fez o agendamento ou quem está acompanhando pode trocar o responsável.")
+    if novo is None or not novo.is_active:
+        raise RegraErro("Escolha quem vai acompanhar.")
+    if novo.pk == ag.responsavel_id:
+        raise RegraErro(f"{novo} já é o responsável.")
+    data = timezone.localdate(ag.inicio)
+    if not pode_transferir_responsavel(data, agora):
+        raise RegraErro("Só dá pra passar o acompanhamento pra outra pessoa a partir de amanhã. Hoje, quem está responsável atende.")
+    if novo.pk in usuarios_bloqueados_em(data):
+        raise RegraErro(f"{novo} marcou que não pode acompanhar nesse dia.")
+    with transaction.atomic():
+        if ag.responsavel_pendente:  # já havia um convite em aberto: é substituído
+            _fechar_convite(ag, Agendamento.RespStatus.EXPIRADO, agora)
+        ag.responsavel_convidado = novo
+        ag.responsavel_status = Agendamento.RespStatus.PENDENTE
+        ag.save(update_fields=["responsavel_convidado", "responsavel_status"])
+        ConviteResponsavel.objects.create(agendamento=ag, convidado=novo, convidado_por=usuario)
+    return ag
+
+
+def cancelar_convite(usuario, ag, agora=None):
+    """Desiste do convite em aberto: o responsável atual continua."""
+    agora = agora or timezone.now()
+    if not ag.responsavel_pendente:
+        raise RegraErro("Não há convite em aberto nesse agendamento.")
+    if not ag.pode_trocar_responsavel(usuario):
+        raise SemPermissao("Só quem fez o agendamento ou quem está acompanhando pode mexer no responsável.")
+    with transaction.atomic():
+        _fechar_convite(ag, Agendamento.RespStatus.EXPIRADO, agora)
+        ag.responsavel_convidado = None
+        ag.responsavel_status = Agendamento.RespStatus.ACEITO
+        ag.save(update_fields=["responsavel_convidado", "responsavel_status"])
     return ag
 
 
 def expirar_convites_pendentes(agora=None):
-    """Convites sem resposta até 1 dia antes do início voltam pra quem agendou.
-    Retorna [(agendamento, usuario_que_nao_respondeu), ...] pra quem for avisar no WhatsApp."""
+    """Convites sem resposta até 1 dia antes do início expiram; o responsável atual continua.
+    Retorna [(agendamento, usuario_que_nao_respondeu, quem_convidou), ...]."""
     agora = agora or timezone.now()
     expirados = []
     pendentes = (
         Agendamento.objects.ativos()
         .filter(responsavel_status=Agendamento.RespStatus.PENDENTE, inicio__lte=agora + timedelta(days=1))
-        .select_related("criado_por", "responsavel", "cliente")
+        .select_related("criado_por", "responsavel", "responsavel_convidado", "cliente")
     )
     with transaction.atomic():
         for ag in pendentes:
-            convidado = ag.responsavel
-            convite = ag.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE).order_by("-criado_em").first()
-            ag.responsavel = ag.criado_por
+            convidado = ag.responsavel_convidado
+            convite = _fechar_convite(ag, Agendamento.RespStatus.EXPIRADO, agora)
+            ag.responsavel_convidado = None
             ag.responsavel_status = Agendamento.RespStatus.ACEITO
-            ag.responsavel_definido_em = agora
-            ag.save(update_fields=["responsavel", "responsavel_status", "responsavel_definido_em"])
-            if convite:
-                convite.status = Agendamento.RespStatus.EXPIRADO
-                convite.respondido_em = agora
-                convite.save(update_fields=["status", "respondido_em"])
-            expirados.append((ag, convidado))
+            if ag.responsavel_id is None:
+                ag.responsavel = ag.criado_por
+            ag.save(update_fields=["responsavel", "responsavel_convidado", "responsavel_status"])
+            expirados.append((ag, convidado, convite.convidado_por if convite else ag.criado_por))
     return expirados
 
 
@@ -494,3 +562,61 @@ def lancar_multa(usuario, cliente, valor, descricao):
     return Debito.objects.create(
         cliente=cliente, motivo=Debito.Motivo.AVULSO, valor=valor, descricao=descricao[:255], criado_por=usuario
     )
+
+
+# ---------- horários disponíveis (varinha mágica da Agenda) ----------
+
+DIAS_SEMANA_CURTO = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+
+
+def janelas_livres(dias=20, agora=None, minimo_horas=None):
+    """Blocos livres da sala nos próximos `dias` dias (a partir de hoje), só os que comportam
+    pelo menos `minimo_horas` (padrão: mínimo do ensaio). Retorna [(data, [(ini_h, fim_h), ...]), ...]
+    com horas inteiras (fim pode ser 24 = meia-noite). Poucas consultas ao banco."""
+    agora = agora or timezone.now()
+    cfg = Configuracao.atual()
+    minimo = minimo_horas or cfg.min_horas_ensaio
+    hoje = timezone.localdate(agora)
+    horarios = {h.dia_semana: h for h in HorarioFuncionamento.objects.all()}
+    ini_total = inicio_em(hoje, 0)
+    fim_total = inicio_em(hoje + timedelta(days=dias), 0) + timedelta(hours=6)
+    ocupados = list(Agendamento.objects.no_intervalo(ini_total, fim_total).values_list("inicio", "fim"))
+    resultado = []
+    for i in range(dias):
+        d = hoje + timedelta(days=i)
+        h = horarios.get(d.weekday())
+        if h is None:
+            abre, fecha = HorarioFuncionamento.PADRAO[d.weekday()]
+        elif not h.aberto:
+            continue
+        else:
+            abre, fecha = h.abre, h.fecha
+        livres = []
+        for hora in range(abre, fecha):
+            ini = inicio_em(d, 0) + timedelta(hours=hora)
+            fim = ini + timedelta(hours=1)
+            livre = ini > agora and not any(ini < f and fim > o for o, f in ocupados)
+            if livre and livres and livres[-1][1] == hora:
+                livres[-1][1] = hora + 1
+            elif livre:
+                livres.append([hora, hora + 1])
+        blocos = [(a, b) for a, b in livres if b - a >= minimo]
+        if blocos:
+            resultado.append((d, blocos))
+    return resultado
+
+
+def texto_horarios_disponiveis(dias=20, agora=None):
+    """Mensagem pronta pra colar no WhatsApp do cliente com os horários livres."""
+    def h(x):
+        return "00h" if x % 24 == 0 else f"{x:02d}h"
+
+    linhas = ["🎸 *Omega Studio – horários disponíveis*", f"(próximos {dias} dias)", ""]
+    janelas = janelas_livres(dias, agora)
+    if not janelas:
+        linhas.append("No momento a agenda está cheia nos próximos dias. Me chama que a gente encaixa! 🙏")
+    for d, blocos in janelas:
+        faixas = " · ".join(f"{h(a)} às {h(b)}" for a, b in blocos)
+        linhas.append(f"*{DIAS_SEMANA_CURTO[d.weekday()]} {d:%d/%m}:* {faixas}")
+    linhas += ["", "Me fala o dia e o horário que fica melhor pra vocês que eu já reservo! 🤘"]
+    return "\n".join(linhas)

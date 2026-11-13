@@ -1,0 +1,36 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Quem acompanha{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'agendamento' ag.pk %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Quem acompanha</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:16px">
+<div class="card" style="display:flex;flex-direction:column;gap:6px">
+<div class="linha"><span class="titulo-card">{{ ag.cliente }}</span><span class="pilula{% if ag.tipo == 'gravacao' %} clara{% endif %}">{{ ag.get_tipo_display }}</span></div>
+<span class="sub" style="font-size:13.5px">{{ dia }} · {{ ini|time:"H:i" }} às {{ fim|time:"H:i" }}</span>
+<span style="font-size:14px">Hoje quem acompanha: <b style="color:var(--ouro)">{{ ag.responsavel|default:ag.criado_por }}</b></span>
+</div>
+
+{% if ag.responsavel_pendente and ag.responsavel_convidado %}
+<div class="card" style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:14px">Convite em aberto pra <b>{{ ag.responsavel_convidado }}</b>. Enquanto ele não aceitar, {{ ag.responsavel }} continua responsável.</span>
+<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="cancelar_convite"><button class="btn pequeno perigo" type="submit">Cancelar convite</button></form>
+</div>
+{% endif %}
+
+{% if pode_transferir %}
+<form method="post" style="display:flex;flex-direction:column;gap:12px">{% csrf_token %}
+<span class="kicker">Passar pra</span>
+<div class="grade3">
+{% for item in usuarios %}{% if not item.atual %}
+<label class="chip"><input type="radio" name="responsavel" value="{{ item.u.pk }}"{% if item.bloqueado %} disabled{% endif %}{% if ag.responsavel_convidado_id == item.u.pk %} checked{% endif %}><span>{% if item.u.pk == user.pk %}Eu{% else %}{{ item.u }}{% endif %}{% if item.bloqueado %} · bloqueado{% endif %}</span></label>
+{% endif %}{% endfor %}
+</div>
+<p class="sub" style="margin:0;font-size:12.5px">A pessoa escolhida precisa aceitar em Meu Calendário. Se recusar ou não responder até 1 dia antes, {{ ag.responsavel|default:ag.criado_por }} continua responsável.</p>
+<button class="btn ouro" type="submit">Enviar convite</button>
+</form>
+{% else %}
+<div class="card"><span style="font-size:14px">É hoje: não dá mais pra passar o acompanhamento pra outra pessoa. Quem está responsável atende.</span></div>
+{% endif %}
+</main>
+{% endblock %}

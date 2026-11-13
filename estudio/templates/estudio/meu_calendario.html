@@ -6,7 +6,10 @@
 {% block conteudo %}
 <main class="conteudo" style="gap:18px">
 
+<div class="grade2">
+<a class="btn" href="{% url 'meus_direcionamentos' %}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Agendamentos{% if enviados_pendentes %} ({{ enviados_pendentes }}){% endif %}</a>
 <a class="btn" href="{% url 'dias_indisponiveis' %}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Dias que não posso{% if dias_bloqueados %} ({{ dias_bloqueados|length }}){% endif %}</a>
+</div>
 
 {% if pendentes %}
 <section style="display:flex;flex-direction:column;gap:10px">
@@ -14,7 +17,7 @@
 {% for ag in pendentes %}
 <div class="card" style="display:flex;flex-direction:column;gap:10px">
 <div class="linha"><span class="titulo-card">{{ ag.cliente }}</span><span class="pilula">{{ ag.get_tipo_display }}</span></div>
-<span class="sub" style="font-size:13.5px">{{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }} · marcado por {{ ag.criado_por }}</span>
+<span class="sub" style="font-size:13.5px">{{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }} · marcado por {{ ag.criado_por }}{% if ag.responsavel and ag.responsavel_id != ag.criado_por_id %} · hoje com {{ ag.responsavel }}{% endif %}</span>
 <div class="grade2">
 <form method="post" action="{% url 'meu_calendario_responder' ag.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="aceitar"><button class="btn ouro pequeno" type="submit">Aceitar</button></form>
 <form method="post" action="{% url 'meu_calendario_responder' ag.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="recusar"><button class="btn pequeno perigo" type="submit">Recusar</button></form>
@@ -25,11 +28,11 @@
 {% endif %}
 
 <section style="display:flex;flex-direction:column;gap:10px">
-<span class="kicker">Confirmados pra acompanhar</span>
+<span class="kicker">Quem acompanha sou eu</span>
 <div class="lista">
 {% for ag in aceitos %}
 <a class="item" href="{% url 'agendamento' ag.pk %}">
-<span style="flex:1"><b>{{ ag.cliente }}</b><br><span class="sub" style="font-size:13px">{{ ag.get_tipo_display }} · {{ ag.inicio|date:"d/m" }} às {{ ag.inicio|time:"H:i" }}</span></span>
+<span style="flex:1"><b>{{ ag.cliente }}</b><br><span class="sub" style="font-size:13px">{{ ag.get_tipo_display }} · {{ ag.inicio|date:"d/m" }} às {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }}</span>{% if ag.responsavel_pendente and ag.responsavel_convidado %}<br><span class="sub" style="font-size:12.5px;color:var(--ouro)">Convite pra {{ ag.responsavel_convidado }} aguardando · se não aceitar, fica com você</span>{% endif %}</span>
 </a>
 {% empty %}<div class="vazio">Nenhum ensaio ou gravação pra acompanhar por enquanto.</div>{% endfor %}
 </div>

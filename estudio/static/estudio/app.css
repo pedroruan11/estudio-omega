@@ -158,3 +158,9 @@ nav.barra>a .bolinha{position:absolute;top:-2px;right:calc(50% - 15px);width:7px
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .sino{position:relative;width:44px;height:44px;border-radius:12px;background:var(--perigo-bg);color:var(--perigo);display:flex;align-items:center;justify-content:center;text-decoration:none}
 .sino-num{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:99px;background:var(--perigo);color:#0A0A0A;font:700 12px Inter,sans-serif;display:flex;align-items:center;justify-content:center}
+/* varinha mágica (Agenda) e avisos rápidos */
+.btn.icone.varinha{width:44px;min-height:44px;color:var(--ouro)}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:60;background:var(--s2);border:1px solid var(--ouro);color:var(--txt);border-radius:14px;padding:14px 16px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.6);text-align:center}
+.folha{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.75);display:flex;align-items:flex-end}
+.folha-caixa{background:var(--s1,#141312);border-top:1px solid var(--linha2);border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));width:100%;display:flex;flex-direction:column;gap:12px}
+.toast.oculto,.folha.oculto{display:none}

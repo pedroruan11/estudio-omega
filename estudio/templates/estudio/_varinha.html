@@ -1,0 +1,33 @@
+{# Varinha mágica: copia os horários livres dos próximos 20 dias pra colar no WhatsApp do cliente. #}
+<button type="button" class="btn icone varinha" id="btn-varinha" aria-label="Copiar horários disponíveis dos próximos 20 dias" title="Copiar horários disponíveis">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 21 12-12"/><path d="m13 7 4 4"/><path d="M18 2v3M16.5 3.5h3M21 7v2M20 8h2M10 2v2M9 3h2"/></svg>
+</button>
+<textarea id="texto-varinha" readonly aria-hidden="true" tabindex="-1" style="position:fixed;top:0;left:-9999px;opacity:0;height:1px;width:1px">{{ texto_disponiveis }}</textarea>
+<div class="toast oculto" id="toast-varinha" role="status"></div>
+<div class="folha oculto" id="folha-varinha" role="dialog" aria-modal="true" aria-label="Horários disponíveis">
+<div class="folha-caixa">
+<div class="linha"><b>Horários disponíveis</b><button type="button" class="btn pequeno" id="fechar-varinha">Fechar</button></div>
+<p class="sub" style="margin:0;font-size:13px">Não deu pra copiar sozinho. Toque e segure no texto, escolha “Selecionar tudo” e “Copiar”.</p>
+<textarea readonly style="width:100%;min-height:50vh;background:var(--s2);color:var(--txt);border:1px solid var(--linha2);border-radius:12px;padding:12px;font:inherit;font-size:14px">{{ texto_disponiveis }}</textarea>
+</div>
+</div>
+<script>
+(function(){
+  const btn=document.getElementById('btn-varinha'),ta=document.getElementById('texto-varinha'),
+        toast=document.getElementById('toast-varinha'),folha=document.getElementById('folha-varinha');
+  function avisar(t){toast.textContent=t;toast.classList.remove('oculto');clearTimeout(avisar.t);avisar.t=setTimeout(()=>toast.classList.add('oculto'),2600)}
+  function copiaAntiga(){
+    try{ta.removeAttribute('aria-hidden');ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);
+        const ok=document.execCommand('copy');ta.blur();window.getSelection&&window.getSelection().removeAllRanges();return ok}catch(e){return false}
+  }
+  function deuCerto(){avisar('✨ Horários dos próximos 20 dias copiados! É só colar no WhatsApp.')}
+  function falhou(){folha.classList.remove('oculto')}
+  btn.addEventListener('click',function(){
+    const texto=ta.value;
+    if(navigator.clipboard&&window.isSecureContext){
+      navigator.clipboard.writeText(texto).then(deuCerto,function(){copiaAntiga()?deuCerto():falhou()});
+    }else{copiaAntiga()?deuCerto():falhou()}
+  });
+  document.getElementById('fechar-varinha').addEventListener('click',()=>folha.classList.add('oculto'));
+})();
+</script>
