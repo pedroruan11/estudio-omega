@@ -1,0 +1,28 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Minhas notificações{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'inicio' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Notificações</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:14px">
+{% for a in pendencias %}
+<a href="{{ a.url }}" class="{% if a.perigo %}erro{% else %}aviso{% endif %}" style="display:flex;justify-content:space-between;align-items:center;text-decoration:none;gap:10px"><span><b>{{ a.titulo }}</b><br><span style="font-size:13px">{{ a.texto }}</span></span><span style="font-weight:700">Ver ›</span></a>
+{% endfor %}
+
+{% for titulo, itens in grupos %}
+<span class="kicker">{{ titulo }}</span>
+<div class="feed">
+{% for i in itens %}
+<a class="feed-item{% if i.nova %} nova{% endif %}" href="{% if i.n.agendamento_id %}{% url 'agendamento' i.n.agendamento_id %}{% elif i.n.cliente_id %}{% url 'cliente' i.n.cliente_id %}{% else %}#{% endif %}">
+<span class="feed-av{% if i.pra_mim %} ouro{% endif %}">{{ i.iniciais }}</span>
+<span class="feed-txt">{% if i.n.autor %}<b>{{ i.autor }}</b> {% endif %}{{ i.n.texto }}{% if i.pra_mim %} <span class="pilula" style="vertical-align:1px">pra você</span>{% endif %}
+<span class="feed-hora">{{ i.hora }}</span></span>
+{% if i.nova %}<span class="feed-ponto" aria-label="nova"></span>{% endif %}
+</a>
+{% endfor %}
+</div>
+{% empty %}
+{% if not pendencias %}<div class="vazio">Nada por aqui hoje. Quando alguém agendar, cancelar, remarcar ou te direcionar um ensaio, aparece aqui. 🤘</div>{% endif %}
+{% endfor %}
+</main>
+{% endblock %}

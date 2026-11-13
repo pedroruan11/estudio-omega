@@ -1,8 +1,8 @@
 {% extends "estudio/base.html" %}
-{% block titulo %}Dias que não posso{% endblock %}
+{% block titulo %}Dias Impedidos{% endblock %}
 {% block topo %}
 <header class="topo" style="flex-direction:column;align-items:stretch;gap:14px">
-<div class="linha"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Dias que não posso</h1></div>
+<div class="linha"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Dias Impedidos</h1></div>
 <div class="linha">
 <a class="btn icone" style="border:0" href="?m={{ anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
 <span style="font-weight:600">{{ titulo }}</span>

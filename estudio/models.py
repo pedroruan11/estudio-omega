@@ -25,6 +25,7 @@ class Usuario(AbstractUser):
         EDICAO = "edicao", "Edição"
 
     perfil = models.CharField(max_length=10, choices=Perfil.choices, default=Perfil.EDICAO)
+    notificacoes_vistas_em = models.DateTimeField(null=True, blank=True, help_text="Última vez que abriu Minhas notificações.")
     telefone = models.CharField(
         "WhatsApp", max_length=20, blank=True,
         help_text="Usado para mandar o pedido de confirmação quando essa pessoa é escolhida como responsável por um ensaio/gravação.",
@@ -348,6 +349,39 @@ class UsuarioDiaIndisponivel(models.Model):
 
     def __str__(self):
         return f"{self.usuario} · {self.data:%d/%m/%Y}"
+
+
+class Notificacao(models.Model):
+    """O que aconteceu na equipe (feed do sininho do Início). Sem destinatário = vale pra toda a equipe."""
+
+    class Tipo(models.TextChoices):
+        AGENDOU = "agendou", "Agendou"
+        CANCELOU = "cancelou", "Cancelou"
+        REMARCOU = "remarcou", "Remarcou"
+        FALTA = "falta", "Falta"
+        DIRECIONOU = "direcionou", "Direcionou pra você"
+        ACEITOU = "aceitou", "Aceitou"
+        RECUSOU = "recusou", "Recusou"
+        EXPIROU = "expirou", "Convite expirou"
+        CONVITE_CANCELADO = "convite_cancelado", "Convite cancelado"
+        BLACKLIST = "blacklist", "Blacklist"
+        MULTA = "multa", "Multa"
+
+    autor = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    destinatario = models.ForeignKey(Usuario, on_delete=models.CASCADE, null=True, blank=True, related_name="notificacoes")
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    texto = models.CharField(max_length=255)
+    agendamento = models.ForeignKey(Agendamento, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        verbose_name = "notificação"
+        verbose_name_plural = "notificações"
+
+    def __str__(self):
+        return self.texto
 
 
 class Debito(models.Model):

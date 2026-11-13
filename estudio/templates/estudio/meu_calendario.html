@@ -7,8 +7,8 @@
 <main class="conteudo" style="gap:18px">
 
 <div class="grade2">
-<a class="btn" href="{% url 'meus_direcionamentos' %}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Agendamentos{% if enviados_pendentes %} ({{ enviados_pendentes }}){% endif %}</a>
-<a class="btn" href="{% url 'dias_indisponiveis' %}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Dias que não posso{% if dias_bloqueados %} ({{ dias_bloqueados|length }}){% endif %}</a>
+<a class="btn" href="{% url 'meus_direcionamentos' %}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Direcionamentos</a>
+<a class="btn" href="{% url 'dias_indisponiveis' %}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Dias Impedidos</a>
 </div>
 
 {% if pendentes %}

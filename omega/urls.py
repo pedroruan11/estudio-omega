@@ -22,6 +22,7 @@ urlpatterns = [
     path("meu-calendario/direcionados/", v.meus_direcionamentos, name="meus_direcionamentos"),
     path("meu-calendario/dias/", v.dias_indisponiveis, name="dias_indisponiveis"),
     path("meu-calendario/<int:pk>/responder/", v.meu_calendario_responder, name="meu_calendario_responder"),
+    path("notificacoes/", v.notificacoes, name="notificacoes"),
     path("lembretes/", v.lembretes_hoje, name="lembretes_hoje"),
     path("lembretes/<int:pk>/enviado/", v.lembrete_marcar, name="lembrete_marcar"),
     path("agendamentos/novo/", v.agendamento_novo, name="agendamento_novo"),

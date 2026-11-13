@@ -9,7 +9,10 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Agendamento, Configuracao, ConviteResponsavel, Debito, HorarioFuncionamento, UsuarioDiaIndisponivel, Usuario
+from .models import (
+    Agendamento, Configuracao, ConviteResponsavel, Debito, HorarioFuncionamento, Notificacao,
+    UsuarioDiaIndisponivel, Usuario,
+)
 
 
 class RegraErro(Exception):
@@ -24,6 +27,52 @@ class ClienteNaBlacklist(RegraErro):
 
 class SemPermissao(RegraErro):
     pass
+
+
+# ---------- notificações (feed do sininho) ----------
+
+_DIAS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
+
+def _quando(ag):
+    ini, fim = timezone.localtime(ag.inicio), timezone.localtime(ag.fim)
+    return f"{_DIAS[ini.weekday()]} {ini:%d/%m}, {ini:%H}h–{fim:%H}h"
+
+
+def _tipo_txt(ag):
+    return ag.get_tipo_display().lower()
+
+
+def notificar(autor, tipo, texto, ag=None, destinatario=None, cliente=None):
+    """Registra no feed. Nunca pode atrapalhar a operação principal."""
+    try:
+        return Notificacao.objects.create(
+            autor=autor if getattr(autor, "pk", None) else None, tipo=tipo, texto=texto[:255],
+            agendamento=ag, cliente=cliente or (ag.cliente if ag else None), destinatario=destinatario,
+        )
+    except Exception:
+        return None
+
+
+def notificacoes_do_usuario(usuario, desde=None):
+    """O que os outros fizeram (geral da equipe ou direcionado a esse usuário)."""
+    from django.db.models import Q
+
+    qs = (
+        Notificacao.objects.filter(Q(destinatario__isnull=True) | Q(destinatario=usuario))
+        .exclude(autor=usuario)
+        .select_related("autor", "agendamento", "cliente")
+    )
+    if desde:
+        qs = qs.filter(criado_em__gte=desde)
+    return qs
+
+
+def notificacoes_nao_lidas(usuario):
+    qs = notificacoes_do_usuario(usuario)
+    if usuario.notificacoes_vistas_em:
+        qs = qs.filter(criado_em__gt=usuario.notificacoes_vistas_em)
+    return qs
 
 
 # ---------- tempo ----------
@@ -215,6 +264,11 @@ def criar_agendamento(
         )
         if pendente:
             ConviteResponsavel.objects.create(agendamento=ag, convidado=responsavel, convidado_por=usuario)
+        notificar(usuario, Notificacao.Tipo.AGENDOU, f"agendou {_tipo_txt(ag)} de {cliente} · {_quando(ag)}", ag)
+        if pendente:
+            notificar(usuario, Notificacao.Tipo.DIRECIONOU,
+                      f"direcionou pra você o {_tipo_txt(ag)} de {cliente} · {_quando(ag)}. Aceite ou recuse em Meu Calendário.",
+                      ag, destinatario=responsavel)
         return ag
 
 
@@ -253,6 +307,8 @@ def cancelar(usuario, ag, agora=None):
         ag.cancelado_em = agora
         ag.cancelado_por = usuario
         ag.save()
+        notificar(usuario, Notificacao.Tipo.CANCELOU,
+                  f"cancelou {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}" + (" (com taxa)" if debito else ""), ag)
     return debito
 
 
@@ -268,10 +324,12 @@ def remarcar(usuario, ag, data, hora, horas=None, agora=None):
             raise SemPermissao("Faltam menos de 48h para o horário: só um administrador pode remarcar.")
         novo_inicio = _checar_horario(data, hora, horas, ag.tipo, ignorar_id=ag.pk, agora=agora)
         debito = _gerar_debito(usuario, ag, Debito.Motivo.REMARCACAO, cfg) if tardio else None
+        antes = _quando(ag)
         ag.inicio = novo_inicio
         ag.horas = horas
         ag.remarcacoes += 1
         ag.save()
+        notificar(usuario, Notificacao.Tipo.REMARCOU, f"remarcou {_tipo_txt(ag)} de {ag.cliente}: {antes} → {_quando(ag)}", ag)
     return debito
 
 
@@ -286,6 +344,7 @@ def marcar_falta(usuario, ag, agora=None):
         debito = _gerar_debito(usuario, ag, Debito.Motivo.FALTA, cfg)
         ag.status = Agendamento.Status.FALTA
         ag.save()
+        notificar(usuario, Notificacao.Tipo.FALTA, f"marcou falta de {ag.cliente} · {_quando(ag)}", ag)
     return debito
 
 
@@ -460,6 +519,14 @@ def responder_convite(usuario, ag, aceitar, agora=None):
         ag.responsavel_convidado = None
         ag.responsavel_status = Agendamento.RespStatus.ACEITO
         ag.save(update_fields=["responsavel", "responsavel_convidado", "responsavel_status", "responsavel_definido_em"])
+        avisar = (convite.convidado_por if convite else None) or ag.criado_por
+        if aceitar:
+            notificar(usuario, Notificacao.Tipo.ACEITOU,
+                      f"aceitou acompanhar o {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}", ag, destinatario=avisar)
+        else:
+            notificar(usuario, Notificacao.Tipo.RECUSOU,
+                      f"recusou acompanhar o {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}. Continua com {ag.responsavel}.",
+                      ag, destinatario=avisar)
     return ag, convite
 
 
@@ -487,6 +554,9 @@ def trocar_responsavel(usuario, ag, novo, agora=None):
         ag.responsavel_status = Agendamento.RespStatus.PENDENTE
         ag.save(update_fields=["responsavel_convidado", "responsavel_status"])
         ConviteResponsavel.objects.create(agendamento=ag, convidado=novo, convidado_por=usuario)
+        notificar(usuario, Notificacao.Tipo.DIRECIONOU,
+                  f"direcionou pra você o {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}. Aceite ou recuse em Meu Calendário.",
+                  ag, destinatario=novo)
     return ag
 
 
@@ -499,6 +569,10 @@ def cancelar_convite(usuario, ag, agora=None):
         raise SemPermissao("Só quem fez o agendamento ou quem está acompanhando pode mexer no responsável.")
     with transaction.atomic():
         _fechar_convite(ag, Agendamento.RespStatus.EXPIRADO, agora)
+        if ag.responsavel_convidado:
+            notificar(usuario, Notificacao.Tipo.CONVITE_CANCELADO,
+                      f"cancelou o convite pra você acompanhar o {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}",
+                      ag, destinatario=ag.responsavel_convidado)
         ag.responsavel_convidado = None
         ag.responsavel_status = Agendamento.RespStatus.ACEITO
         ag.save(update_fields=["responsavel_convidado", "responsavel_status"])
@@ -524,7 +598,12 @@ def expirar_convites_pendentes(agora=None):
             if ag.responsavel_id is None:
                 ag.responsavel = ag.criado_por
             ag.save(update_fields=["responsavel", "responsavel_convidado", "responsavel_status"])
-            expirados.append((ag, convidado, convite.convidado_por if convite else ag.criado_por))
+            quem = convite.convidado_por if convite else ag.criado_por
+            expirados.append((ag, convidado, quem))
+            if quem:
+                notificar(None, Notificacao.Tipo.EXPIROU,
+                          f"O convite pra {convidado} acompanhar o {_tipo_txt(ag)} de {ag.cliente} ({_quando(ag)}) "
+                          f"expirou sem resposta. Continua com {ag.responsavel}.", ag, destinatario=quem)
     return expirados
 
 
@@ -559,9 +638,11 @@ def lancar_multa(usuario, cliente, valor, descricao):
         raise SemPermissao("Só um administrador lança multas.")
     if valor is None or valor <= 0:
         raise RegraErro("Informe um valor maior que zero.")
-    return Debito.objects.create(
+    d = Debito.objects.create(
         cliente=cliente, motivo=Debito.Motivo.AVULSO, valor=valor, descricao=descricao[:255], criado_por=usuario
     )
+    notificar(usuario, Notificacao.Tipo.MULTA, f"lançou multa pra {cliente}: {descricao[:120]}", cliente=cliente)
+    return d
 
 
 # ---------- horários disponíveis (varinha mágica da Agenda) ----------

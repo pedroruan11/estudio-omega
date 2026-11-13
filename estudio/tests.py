@@ -655,6 +655,54 @@ class VarinhaTest(Base):
         self.assertNotContains(r, "Lembrete no WhatsApp")
 
 
+class PerfumariasTest(Base):
+    def test_rotulos_meu_calendario(self):
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("meu_calendario"))
+        self.assertContains(r, "Direcionamentos")
+        self.assertContains(r, "Dias Impedidos")
+
+    def test_sem_botao_blacklist_se_ja_esta(self):
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse("cliente", args=[self.fire.pk])), "Colocar na blacklist")
+        regras.lancar_multa(self.admin, self.fire, Decimal("50"), "teste")
+        self.assertNotContains(self.client.get(reverse("cliente", args=[self.fire.pk])), "Colocar na blacklist")
+
+    def test_rodape_sem_mais_e_avatar_no_inicio(self):
+        self.admin.first_name = "Pedro"
+        self.admin.save()
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("inicio"))
+        self.assertContains(r, 'class="avatar-topo"')
+        self.assertContains(r, ">PE<")
+        self.assertNotContains(r, "Mais</a>")
+        self.assertContains(r, reverse("notificacoes"))
+
+
+class NotificacoesTest(Base):
+    def test_feed_e_nao_lidas(self):
+        fabio = Usuario.objects.create_user("fabio", password="x", perfil=Usuario.Perfil.ADMIN)
+        ag = self.agendar(usuario=self.admin, responsavel=fabio)
+        # fábio vê o agendamento (geral) e o direcionamento (pra ele); pedro não vê o que ele mesmo fez
+        self.assertEqual(regras.notificacoes_nao_lidas(fabio).count(), 2)
+        self.assertEqual(regras.notificacoes_nao_lidas(self.admin).count(), 0)
+        # colab vê só o geral
+        self.assertEqual(regras.notificacoes_nao_lidas(self.edicao).count(), 1)
+        regras.responder_convite(fabio, ag, True)
+        self.assertEqual(regras.notificacoes_nao_lidas(self.admin).count(), 1)
+        self.client.force_login(fabio)
+        r = self.client.get(reverse("notificacoes"))
+        self.assertContains(r, "direcionou pra você")
+        self.assertEqual(regras.notificacoes_nao_lidas(Usuario.objects.get(pk=fabio.pk)).count(), 0)
+
+    def test_cancelar_e_remarcar_notificam(self):
+        ag = self.agendar()
+        regras.remarcar(self.edicao, ag, SEG, 20, agora=ANTES)
+        regras.cancelar(self.edicao, ag, agora=ANTES)
+        tipos = list(regras.notificacoes_do_usuario(self.admin).values_list("tipo", flat=True))
+        self.assertEqual(sorted(tipos), ["agendou", "cancelou", "remarcou"])
+
+
 class TelasNovasTest(Base):
     def test_meu_calendario_tela(self):
         self.client.force_login(self.edicao)

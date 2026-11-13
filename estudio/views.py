@@ -223,8 +223,72 @@ def inicio(request):
         "janela_txt": texto_janela(janela),
         "pendencias": regras.pendencias_cobranca().count(),
         "lembretes_pendentes": lembretes_pendentes,
+        "nao_lidas": regras.notificacoes_nao_lidas(request.user).count(),
         "aba": "inicio",
     })
+
+
+def _avisos(usuario):
+    """O que o sininho do Início conta: multas pra confirmar, convites pra responder e lembretes do dia."""
+    itens = []
+    multas = regras.pendencias_cobranca().count()
+    if multas:
+        itens.append({"qtd": multas, "url": reverse("cobrancas"), "perigo": True,
+                      "titulo": "Confirmar pagamento de multa",
+                      "texto": f"{multas} ensaio{'s' if multas > 1 else ''} de banda com multa já terminou."})
+    convites = regras.convites_pendentes(usuario).count()
+    if convites:
+        itens.append({"qtd": convites, "url": reverse("meu_calendario"), "perigo": False,
+                      "titulo": "Convite pra acompanhar",
+                      "texto": f"{convites} ensaio{'s' if convites > 1 else ''}/gravaç{'ões' if convites > 1 else 'ão'} esperando você aceitar ou recusar."})
+    if timezone.localtime().hour >= 12:
+        lembretes = regras.agendamentos_de_hoje_para_lembrar().filter(lembrete_enviado_em__isnull=True).count()
+        if lembretes:
+            itens.append({"qtd": lembretes, "url": reverse("lembretes_hoje"), "perigo": False,
+                          "titulo": "Lembretes de hoje",
+                          "texto": f"{lembretes} cliente{'s' if lembretes > 1 else ''} com ensaio/gravação hoje ainda sem lembrete."})
+    return itens
+
+
+@login_required
+def notificacoes(request):
+    """Minhas notificações (sininho do Início): o que a equipe fez hoje e ontem, estilo rede social.
+    Ao abrir, tudo fica como lido."""
+    from .context_processors import iniciais
+
+    agora = timezone.now()
+    hoje = timezone.localdate()
+    vistas = request.user.notificacoes_vistas_em
+    inicio_ontem = regras.inicio_em(hoje - timedelta(days=1), 0)
+    grupos = {"Hoje": [], "Ontem": []}
+    for n in regras.notificacoes_do_usuario(request.user, desde=inicio_ontem)[:150]:
+        quando = timezone.localtime(n.criado_em)
+        grupos["Hoje" if quando.date() == hoje else "Ontem"].append({
+            "n": n,
+            "nova": vistas is None or n.criado_em > vistas,
+            "pra_mim": n.destinatario_id == request.user.pk,
+            "autor": (n.autor.first_name or n.autor.username) if n.autor else "Omega",
+            "iniciais": iniciais(n.autor) if n.autor else "Ω",
+            "hora": _tempo_atras(agora - n.criado_em, quando),
+        })
+    request.user.notificacoes_vistas_em = agora
+    request.user.save(update_fields=["notificacoes_vistas_em"])
+    return render(request, "estudio/notificacoes.html", {
+        "grupos": [(k, v) for k, v in grupos.items() if v],
+        "pendencias": _avisos(request.user),
+        "aba": "inicio",
+    })
+
+
+def _tempo_atras(delta, quando):
+    seg = int(delta.total_seconds())
+    if seg < 60:
+        return "agora"
+    if seg < 3600:
+        return f"{seg // 60} min"
+    if seg < 6 * 3600:
+        return f"{seg // 3600} h"
+    return f"{quando:%H:%M}"
 
 
 @login_required
@@ -765,6 +829,7 @@ def cliente_blacklist(request, pk):
         c.motivo_blacklist = motivo
         c.save()
         Anotacao.objects.create(cliente=c, autor=request.user, texto=f"Colocado na blacklist: {motivo}")
+        regras.notificar(request.user, "blacklist", f"colocou {c} na blacklist: {motivo}", cliente=c)
         messages.warning(request, f"{c} entrou na blacklist.")
     return redirect("cliente", pk=pk)
 

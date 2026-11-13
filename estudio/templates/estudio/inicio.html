@@ -1,14 +1,14 @@
-{% extends "estudio/base.html" %}{% load static %}
+{% extends "estudio/base.html" %}
 {% block titulo %}Início{% endblock %}
 {% block topo %}
 <header class="topo">
-<div style="display:flex;flex-direction:column;gap:4px"><span class="kicker ouro">{{ dia_curto }}</span><h1>Hoje no estúdio</h1></div>
-<div style="display:flex;align-items:center;gap:10px">
-{% if pendencias %}<a href="{% url 'cobrancas' %}" class="sino" aria-label="{{ pendencias }} cobrança{{ pendencias|pluralize }} de multa para confirmar">
-<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-<span class="sino-num">{{ pendencias }}</span></a>{% endif %}
-<img class="logo-mini" src="{% static 'estudio/img/simbolo.png' %}" alt="Omega Studios" style="object-fit:contain;border-radius:0">
+<div style="display:flex;align-items:center;gap:12px;min-width:0">
+<a href="{% url 'mais' %}" class="avatar-topo" aria-label="Menu de {{ user }}">{{ minhas_iniciais }}</a>
+<div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="kicker ouro">{{ dia_curto }}</span><h1>Hoje no estúdio</h1></div>
 </div>
+<a href="{% url 'notificacoes' %}" class="sino{% if not nao_lidas %} calmo{% endif %}" aria-label="Minhas notificações{% if nao_lidas %}: {{ nao_lidas }} nova{{ nao_lidas|pluralize }}{% endif %}">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+{% if nao_lidas %}<span class="sino-num">{% if nao_lidas > 9 %}9+{% else %}{{ nao_lidas }}{% endif %}</span>{% endif %}</a>
 </header>
 {% endblock %}
 {% block conteudo %}

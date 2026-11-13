@@ -76,7 +76,7 @@
 {% endif %}
 {% if c.blacklist_manual %}
 {% if user.is_admin %}<form method="post" action="{% url 'cliente_blacklist' c.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="tirar"><button class="btn" type="submit">Tirar da blacklist</button></form>{% endif %}
-{% else %}
+{% elif not bl %}
 <button type="button" class="btn perigo" id="abrir-bl" aria-expanded="false" aria-controls="form-bl">Colocar na blacklist</button>
 <form method="post" action="{% url 'cliente_blacklist' c.pk %}" id="form-bl" class="card fino oculto" style="flex-direction:column;gap:10px;scroll-margin-bottom:120px">{% csrf_token %}
 <input type="hidden" name="acao" value="por">
