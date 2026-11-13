@@ -720,3 +720,44 @@ class TelasNovasTest(Base):
         self.client.force_login(self.edicao)
         r = self.client.get(reverse("lembretes_hoje"))
         self.assertEqual(r.status_code, 200)
+
+
+class AjustesQuemAtendeTest(Base):
+    def setUp(self):
+        super().setUp()
+        self.fabio = Usuario.objects.create_user("fabio", password="x", first_name="Fabio",
+                                                 perfil=Usuario.Perfil.ADMIN, telefone="(11) 97016-4941")
+
+    def test_agenda_semana_mostra_quem_atende_com_whatsapp(self):
+        ag = self.agendar(usuario=self.fabio)
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("agenda") + f"?d={SEG.isoformat()}")
+        self.assertContains(r, "Atende:")
+        self.assertContains(r, "https://wa.me/5511970164941")
+        # pra quem atende, aparece "você" e sem link
+        self.client.force_login(self.fabio)
+        r = self.client.get(reverse("agenda") + f"?d={SEG.isoformat()}")
+        self.assertContains(r, "Atende: <b>você</b>")
+        self.assertNotContains(r, "https://wa.me/5511970164941")
+        self.assertContains(r, reverse("agendamento", args=[ag.pk]))
+
+    def test_lista_do_mes_mostra_inicio_e_fim(self):
+        self.agendar(data=SAB, hora=12, horas=2)
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("agenda_mes") + "?m=2030-01&v=lista")
+        self.assertContains(r, "12 – 14")
+
+    def test_direcionamentos_so_de_hoje_em_diante(self):
+        hoje = timezone.localdate()
+        ontem = Agendamento.objects.create(cliente=self.fire, tipo="ensaio", horas=2, valor_hora=70, criado_por=self.admin,
+                                           responsavel=self.admin, inicio=regras.inicio_em(hoje - timedelta(days=1), 18))
+        cedo = Agendamento.objects.create(cliente=self.fire, tipo="ensaio", horas=1, valor_hora=70, criado_por=self.admin,
+                                          responsavel=self.admin, inicio=regras.inicio_em(hoje, 0))
+        from .models import ConviteResponsavel
+        for ag in (ontem, cedo):
+            ConviteResponsavel.objects.create(agendamento=ag, convidado=self.fabio, convidado_por=self.admin,
+                                              status=Agendamento.RespStatus.EXPIRADO)
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("meus_direcionamentos"))
+        itens = [i["ag"].pk for i in r.context["itens"]]
+        self.assertEqual(itens, [cedo.pk])

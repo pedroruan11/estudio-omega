@@ -8,9 +8,9 @@
 <a href="{% url 'agendamento' f.ag.pk %}" style="text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:6px">
 <div class="linha"><span class="titulo-card">{{ f.ag.cliente }}</span><span class="pilula{% if f.ag.tipo == 'gravacao' %} clara{% endif %}">{{ f.ag.get_tipo_display }} · {{ f.ag.horas }}h</span></div>
 <span class="sub">{{ f.ini|time:"H:i" }} às {{ f.fim_l|time:"H:i" }}{% if f.ag.contato %} · {{ f.ag.contato.nome }}{% endif %}</span>
-{% if f.resp_nome %}<span class="sub" style="color:var(--ouro);font-weight:600">Responsável: {{ f.resp_nome }}{% if f.resp_convidado %} · convite pra {{ f.resp_convidado }} aguardando{% endif %}</span>{% endif %}
 {% if f.bl %}<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pilula perigo">Blacklist</span>{% if f.multa %}<span style="font-size:13px;font-weight:700;color:var(--perigo)">Cobrar multa {{ f.multa }}</span>{% endif %}</span>{% endif %}
 </a>
+{% include "estudio/_atende.html" with a=f.atende convidado=f.resp_convidado %}
 </div></div>
 {% endif %}
 {% empty %}

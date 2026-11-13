@@ -157,7 +157,22 @@ def _ocupacao(data):
     return usadas, total
 
 
-def _faixas_contexto(data):
+def _atendente(ag, usuario=None):
+    """Quem vai atender o ensaio/gravação, com link rápido pro WhatsApp dessa pessoa."""
+    quem = ag.responsavel or ag.criado_por
+    if not quem:
+        return None
+    sou_eu = bool(usuario and usuario.pk == quem.pk)
+    link = ""
+    if not sou_eu and quem.telefone:
+        ini, fim = timezone.localtime(ag.inicio), timezone.localtime(ag.fim)
+        texto = (f"Oi, {primeiro_nome(quem)}! Sobre o {ag.get_tipo_display().lower()} de {ag.cliente} · "
+                 f"{ini:%d/%m} das {ini:%H:%M} às {fim:%H:%M}.")
+        link = link_whatsapp_numero(quem.telefone, texto)
+    return {"nome": primeiro_nome(quem), "sou_eu": sou_eu, "link": link}
+
+
+def _faixas_contexto(data, usuario=None):
     faixas = regras.faixas_do_dia(data)
     for f in faixas:
         f["ini"] = timezone.localtime(f["inicio"])
@@ -168,6 +183,7 @@ def _faixas_contexto(data):
             f["bl"] = cli.blacklist_manual or multa > 0
             f["multa"] = brl(multa) if multa > 0 else ""
             ag = f["ag"]
+            f["atende"] = _atendente(ag, usuario)
             if ag.responsavel_id and ag.responsavel_id != ag.criado_por_id:
                 f["resp_nome"] = nome_usuario(ag.responsavel)
             if ag.responsavel_pendente and ag.responsavel_convidado_id:
@@ -204,7 +220,7 @@ def inicio(request):
         pass
     _expirar_convites_e_avisar(request)
     hoje = timezone.localdate()
-    faixas = _faixas_contexto(hoje)
+    faixas = _faixas_contexto(hoje, request.user)
     ocupadas = sum(f["horas"] for f in faixas if not f["livre"])
     livres = sum(f["horas"] for f in faixas if f["livre"])
     janela = HorarioFuncionamento.do_dia(hoje)
@@ -310,7 +326,7 @@ def agenda(request):
         "titulo_semana": f"{seg:%d} – {(seg + timedelta(days=6)):%d} de {MESES[(seg + timedelta(days=6)).month - 1]}",
         "anterior": (seg - timedelta(days=7)).isoformat(),
         "proxima": (seg + timedelta(days=7)).isoformat(),
-        "faixas": _faixas_contexto(dia),
+        "faixas": _faixas_contexto(dia, request.user),
         "texto_disponiveis": regras.texto_horarios_disponiveis(DIAS_DISPONIVEIS),
         "janela_txt": texto_janela(janela),
         "pct": int(usadas * 100 / total) if total else 0,
@@ -367,6 +383,8 @@ def agenda_mes(request):
                 "fds": d.weekday() >= 5,
                 "cancelado": ag.status == Agendamento.Status.CANCELADO,
                 "bl": cli.na_blacklist,
+                "ini": timezone.localtime(ag.inicio),
+                "fim": timezone.localtime(ag.fim),
             })
             dia_atual = d
     return render(request, "estudio/agenda_mes.html", {
@@ -889,7 +907,8 @@ def meu_calendario_responder(request, pk):
 @login_required
 def meus_direcionamentos(request):
     """Agendamentos que eu direcionei pra outra pessoa acompanhar, com o status de cada convite."""
-    agora = timezone.now()
+    # Só os de hoje em diante (os de hoje continuam aparecendo mesmo depois de terminar).
+    agora = regras.inicio_em(timezone.localdate(), 0)
     itens = []
     for c in regras.convites_enviados(request.user, agora):
         ag = c.agendamento

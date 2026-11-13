@@ -175,7 +175,7 @@ def faixas_do_dia(data):
     abre, fecha = janela
     ini_dia, fim_dia = inicio_em(data, abre), inicio_em(data, 0) + timedelta(hours=fecha)
     ags = list(
-        Agendamento.objects.no_intervalo(ini_dia, fim_dia).select_related("cliente", "contato", "responsavel", "responsavel_convidado").order_by("inicio")
+        Agendamento.objects.no_intervalo(ini_dia, fim_dia).select_related("cliente", "contato", "responsavel", "responsavel_convidado", "criado_por").order_by("inicio")
     )
     faixas, cursor = [], ini_dia
     for ag in ags:
