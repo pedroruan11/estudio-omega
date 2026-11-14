@@ -620,7 +620,7 @@ class TrocaResponsavelTest(Base):
         r = self.client.get(reverse("agendamento", args=[self.ag.pk]))
         self.assertContains(r, "Quem acompanha")
         self.assertContains(r, "Passar pra outro técnico")
-        self.assertContains(r, "Mandar mensagem")
+        self.assertContains(r, ">Mensagem</a>")
         self.assertNotContains(r, "<span>Tipo</span>")
         self.assertEqual(self.client.get(reverse("agendamento_responsavel", args=[self.ag.pk])).status_code, 200)
         self.assertEqual(self.client.get(reverse("meus_direcionamentos")).status_code, 200)
@@ -761,3 +761,39 @@ class AjustesQuemAtendeTest(Base):
         r = self.client.get(reverse("meus_direcionamentos"))
         itens = [i["ag"].pk for i in r.context["itens"]]
         self.assertEqual(itens, [cedo.pk])
+
+
+class AjustesTelasTest(Base):
+    def test_lista_do_mes_sem_cancelados(self):
+        ag = self.agendar(data=SAB, hora=12, horas=2)
+        outro = self.agendar(cliente=criar_cliente("Elvis"), data=SAB, hora=15, horas=2)
+        regras.cancelar(self.edicao, outro, agora=ANTES)
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("agenda_mes") + "?m=2030-01&v=lista")
+        self.assertEqual([l["ag"].pk for l in r.context["linhas"]], [ag.pk])
+
+    def test_agendamento_botao_mensagem(self):
+        ag = self.agendar()
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("agendamento", args=[ag.pk]))
+        self.assertContains(r, ">Mensagem</a>", html=False)
+        self.assertNotContains(r, "Mandar mensagem")
+        self.assertContains(r, "#25D366")
+
+    def test_meu_calendario_mostra_dia_da_semana(self):
+        self.agendar()  # SEG
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("meu_calendario"))
+        self.assertContains(r, "Ensaio · Segunda · 07/01")
+
+    def test_dias_impedidos_salvar_varios(self):
+        hoje = timezone.localdate()
+        a, b, c = (hoje + timedelta(days=n) for n in (3, 4, 5))
+        regras.bloquear_dia(self.edicao, c)
+        self.client.force_login(self.edicao)
+        r = self.client.post(reverse("dias_indisponiveis"), {
+            "ini": hoje.isoformat(), "fim": (hoje + timedelta(days=10)).isoformat(),
+            "datas": [a.isoformat(), b.isoformat()], "m": "", "ir": "",
+        })
+        self.assertRedirects(r, reverse("meu_calendario"), fetch_redirect_response=False)
+        self.assertEqual(set(self.edicao.dias_bloqueados.values_list("data", flat=True)), {a, b})

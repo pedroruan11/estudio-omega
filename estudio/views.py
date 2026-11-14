@@ -367,7 +367,7 @@ def agenda_mes(request):
     linhas = []
     if visao == "lista":
         ags = (
-            Agendamento.objects.filter(inicio__gte=ini, inicio__lt=fim, status__in=[Agendamento.Status.AGENDADO, Agendamento.Status.CANCELADO])
+            Agendamento.objects.ativos().filter(inicio__gte=ini, inicio__lt=fim)
             .select_related("cliente")
             .order_by("inicio")
         )
@@ -971,7 +971,24 @@ def agendamento_responsavel(request, pk):
 def dias_indisponiveis(request):
     hoje = timezone.localdate()
     if request.method == "POST":
-        d = parse_data(request.POST.get("data"))
+        ini, fim = parse_data(request.POST.get("ini")), parse_data(request.POST.get("fim"))
+        if ini and fim:
+            # Salvar: os dias marcados na grade ficam impedidos, os desmarcados são liberados.
+            marcados = {parse_data(v) for v in request.POST.getlist("datas")}
+            ja = set(request.user.dias_bloqueados.filter(data__gte=ini, data__lte=fim).values_list("data", flat=True))
+            d = max(ini, hoje)
+            while d <= fim:
+                if d in marcados and d not in ja:
+                    regras.bloquear_dia(request.user, d)
+                elif d not in marcados and d in ja:
+                    regras.desbloquear_dia(request.user, d)
+                d += timedelta(days=1)
+            ir = request.POST.get("ir", "")
+            if ir:  # trocou de mês: salva e continua na tela
+                return redirect(reverse("dias_indisponiveis") + f"?m={ir}")
+            messages.success(request, "Dias impedidos salvos.")
+            return redirect("meu_calendario")
+        d = parse_data(request.POST.get("data"))  # compatibilidade: alterna um dia só
         if d and d >= hoje:
             if request.user.dias_bloqueados.filter(data=d).exists():
                 regras.desbloquear_dia(request.user, d)
@@ -998,6 +1015,8 @@ def dias_indisponiveis(request):
     prox = base.replace(day=ultimo) + timedelta(days=1)
     return render(request, "estudio/dias_indisponiveis.html", {
         "semanas": semanas,
+        "grade_ini": semanas[0][0]["data"],
+        "grade_fim": semanas[-1][-1]["data"],
         "titulo": f"{MESES[base.month - 1].capitalize()} {base.year}",
         "anterior": f"{ant.year}-{ant.month:02d}",
         "proxima": f"{prox.year}-{prox.month:02d}",

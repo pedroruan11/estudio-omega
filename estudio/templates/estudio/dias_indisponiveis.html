@@ -1,30 +1,39 @@
 {% extends "estudio/base.html" %}
 {% block titulo %}Dias Impedidos{% endblock %}
 {% block topo %}
-<header class="topo" style="flex-direction:column;align-items:stretch;gap:14px">
-<div class="linha"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Dias Impedidos</h1></div>
-<div class="linha">
-<a class="btn icone" style="border:0" href="?m={{ anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
-<span style="font-weight:600">{{ titulo }}</span>
-<a class="btn icone" style="border:0" href="?m={{ proxima }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
-</div>
-</header>
+<header class="topo compacto"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Dias Impedidos</h1></header>
 {% endblock %}
 {% block conteudo %}
 <main class="conteudo">
-<p class="sub" style="margin:0">Marque os dias em que você não pode ser escolhido como responsável por acompanhar um ensaio ou gravação. Toque de novo pra desmarcar.</p>
+<form method="post" action="{% url 'dias_indisponiveis' %}" id="form-dias" style="display:flex;flex-direction:column;gap:14px">{% csrf_token %}
+<input type="hidden" name="m" value="{{ mes_atual }}">
+<input type="hidden" name="ini" value="{{ grade_ini|date:'Y-m-d' }}">
+<input type="hidden" name="fim" value="{{ grade_fim|date:'Y-m-d' }}">
+<input type="hidden" name="ir" value="">
+<div class="linha">
+<button type="submit" class="btn icone nav-mes" style="border:0" data-ir="{{ anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+<span style="font-weight:600">{{ titulo }}</span>
+<button type="submit" class="btn icone nav-mes" style="border:0" data-ir="{{ proxima }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+</div>
+<p class="sub" style="margin:0">Toque nos dias em que você não pode ser escolhido como responsável por acompanhar um ensaio ou gravação (toque de novo pra desmarcar) e depois em <b>Salvar</b>.</p>
 <div class="mes">
 {% for d in dias %}<div class="cab">{{ d }}</div>{% endfor %}
 {% for semana in semanas %}{% for d in semana %}
-<form method="post" action="{% url 'dias_indisponiveis' %}">{% csrf_token %}
-<input type="hidden" name="data" value="{{ d.data|date:'Y-m-d' }}">
-<input type="hidden" name="m" value="{{ mes_atual }}">
-<button type="submit" class="{% if d.fora %}fora{% endif %}{% if d.hoje %} hoje{% endif %}{% if d.passado %} passado{% endif %}{% if d.bloqueado %} bloqueado{% endif %}"{% if d.passado %} disabled{% endif %} aria-label="{{ d.data|date:'d/m' }}{% if d.bloqueado %}, bloqueado{% endif %}">{{ d.data|date:"j" }}</button>
-</form>
+<label class="dia-imp{% if d.fora %} fora{% endif %}{% if d.hoje %} hoje{% endif %}{% if d.passado %} passado{% endif %}">
+<input type="checkbox" name="datas" value="{{ d.data|date:'Y-m-d' }}"{% if d.bloqueado %} checked{% endif %}{% if d.passado %} disabled{% endif %}>
+<span aria-label="{{ d.data|date:'d/m' }}">{{ d.data|date:"j" }}</span>
+</label>
 {% endfor %}{% endfor %}
 </div>
-<div class="sub" style="display:flex;gap:10px;align-items:center;font-size:12.5px;margin-top:6px">
-<span style="display:inline-block;width:10px;height:10px;border-radius:4px;background:var(--perigo-bg);border:1px solid var(--perigo-borda)"></span> dia bloqueado
+<div class="sub" style="display:flex;gap:10px;align-items:center;font-size:12.5px">
+<span style="display:inline-block;width:10px;height:10px;border-radius:4px;background:var(--perigo-bg);border:1px solid var(--perigo-borda)"></span> dia impedido
 </div>
+<button type="submit" class="btn ouro">Salvar</button>
+</form>
 </main>
+<script>
+document.querySelectorAll('.nav-mes').forEach(function (b) {
+  b.addEventListener('click', function () { document.querySelector('#form-dias [name=ir]').value = b.dataset.ir; });
+});
+</script>
 {% endblock %}

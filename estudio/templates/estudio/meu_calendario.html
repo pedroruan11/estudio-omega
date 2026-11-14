@@ -1,4 +1,5 @@
 {% extends "estudio/base.html" %}
+{% load omega %}
 {% block titulo %}Meu Calendário{% endblock %}
 {% block topo %}
 <header class="topo compacto"><a class="voltar" href="{% url 'inicio' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Meu Calendário</h1></header>
@@ -17,7 +18,7 @@
 {% for ag in pendentes %}
 <div class="card" style="display:flex;flex-direction:column;gap:10px">
 <div class="linha"><span class="titulo-card">{{ ag.cliente }}</span><span class="pilula">{{ ag.get_tipo_display }}</span></div>
-<span class="sub" style="font-size:13.5px">{{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }} · marcado por {{ ag.criado_por }}{% if ag.responsavel and ag.responsavel_id != ag.criado_por_id %} · hoje com {{ ag.responsavel }}{% endif %}</span>
+<span class="sub" style="font-size:13.5px">{{ ag.inicio|dia_semana }} · {{ ag.inicio|date:"d/m" }} · {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }} · marcado por {{ ag.criado_por }}{% if ag.responsavel and ag.responsavel_id != ag.criado_por_id %} · hoje com {{ ag.responsavel }}{% endif %}</span>
 <div class="grade2">
 <form method="post" action="{% url 'meu_calendario_responder' ag.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="aceitar"><button class="btn ouro pequeno" type="submit">Aceitar</button></form>
 <form method="post" action="{% url 'meu_calendario_responder' ag.pk %}">{% csrf_token %}<input type="hidden" name="acao" value="recusar"><button class="btn pequeno perigo" type="submit">Recusar</button></form>
@@ -32,7 +33,7 @@
 <div class="lista">
 {% for ag in aceitos %}
 <a class="item" href="{% url 'agendamento' ag.pk %}">
-<span style="flex:1"><b>{{ ag.cliente }}</b><br><span class="sub" style="font-size:13px">{{ ag.get_tipo_display }} · {{ ag.inicio|date:"d/m" }} às {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }}</span>{% if ag.responsavel_pendente and ag.responsavel_convidado %}<br><span class="sub" style="font-size:12.5px;color:var(--ouro)">Convite pra {{ ag.responsavel_convidado }} aguardando · se não aceitar, fica com você</span>{% endif %}</span>
+<span style="flex:1"><b>{{ ag.cliente }}</b><br><span class="sub" style="font-size:13px">{{ ag.get_tipo_display }} · {{ ag.inicio|dia_semana }} · {{ ag.inicio|date:"d/m" }} às {{ ag.inicio|time:"H:i" }}–{{ ag.fim|time:"H:i" }}</span>{% if ag.responsavel_pendente and ag.responsavel_convidado %}<br><span class="sub" style="font-size:12.5px;color:var(--ouro)">Convite pra {{ ag.responsavel_convidado }} aguardando · se não aceitar, fica com você</span>{% endif %}</span>
 </a>
 {% empty %}<div class="vazio">Nenhum ensaio ou gravação pra acompanhar por enquanto.</div>{% endfor %}
 </div>
@@ -44,7 +45,7 @@
 <div class="lista">
 {% for c in historico %}
 <div class="item">
-<span style="flex:1"><b>{{ c.agendamento.cliente }}</b><br><span class="sub" style="font-size:13px">{{ c.agendamento.inicio|date:"d/m" }} · {% if c.status == 'recusado' %}você recusou{% else %}expirou sem resposta{% endif %}</span></span>
+<span style="flex:1"><b>{{ c.agendamento.cliente }}</b><br><span class="sub" style="font-size:13px">{{ c.agendamento.inicio|dia_semana }} · {{ c.agendamento.inicio|date:"d/m" }} · {% if c.status == 'recusado' %}você recusou{% else %}expirou sem resposta{% endif %}</span></span>
 <span class="pilula{% if c.status == 'recusado' %} perigo{% else %} cinza{% endif %}">{{ c.get_status_display }}</span>
 </div>
 {% endfor %}
