@@ -3,7 +3,7 @@
 Toda criação, cancelamento, remarcação e falta passa por aqui, para que as
 regras valham igual em qualquer tela (e, no futuro, no atendente de IA do WhatsApp).
 """
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
@@ -167,6 +167,61 @@ def horarios_livres(data, tipo, horas, ignorar_id=None, agora=None):
     return livres
 
 
+def _ocupados(inicio, fim):
+    return list(Agendamento.objects.no_intervalo(inicio, fim).values_list("inicio", "fim"))
+
+
+def inicios_com_fins(data, tipo, agora=None, ocupados=None, cfg=None):
+    """Novo agendamento passo a passo: horas de início livres do dia e, pra cada uma,
+    até que horas dá pra ir (respeitando mínimo/máximo do tipo, horário da sala e choques).
+    Ex.: [{"hora": 18, "fins": [20, 21, 22]}, ...]"""
+    janela = HorarioFuncionamento.do_dia(data)
+    if janela is None:
+        return []
+    abre, fecha = janela
+    minimo, maximo = limites_duracao(tipo, cfg)
+    agora = agora or timezone.now()
+    if ocupados is None:
+        dia_ini = inicio_em(data, 0)
+        ocupados = _ocupados(dia_ini, dia_ini + timedelta(days=1, hours=6))
+    saida = []
+    for h in range(abre, fecha - minimo + 1):
+        ini = inicio_em(data, h)
+        if ini <= agora:
+            continue
+        fins = []
+        for horas in range(1, min(maximo, fecha - h) + 1):
+            fim = ini + timedelta(hours=horas)
+            if any(ini < f and fim > i for i, f in ocupados):
+                break
+            if horas >= minimo:
+                fins.append(h + horas)
+        if fins:
+            saida.append({"hora": h, "fins": fins})
+    return saida
+
+
+def dias_com_vaga(ano, mes, tipo, agora=None):
+    """Dias do mês que têm pelo menos um horário livre pro tipo (calendário do novo agendamento)."""
+    import calendar as _cal
+
+    agora = agora or timezone.now()
+    cfg = Configuracao.atual()
+    hoje = timezone.localdate(agora)
+    ultimo = _cal.monthrange(ano, mes)[1]
+    primeiro_dia = max(date(ano, mes, 1), hoje)
+    if primeiro_dia > date(ano, mes, ultimo):
+        return []
+    ocupados = _ocupados(inicio_em(primeiro_dia, 0), inicio_em(date(ano, mes, ultimo), 0) + timedelta(days=1, hours=6))
+    dias = []
+    d = primeiro_dia
+    while d.month == mes:
+        if inicios_com_fins(d, tipo, agora=agora, ocupados=ocupados, cfg=cfg):
+            dias.append(d)
+        d += timedelta(days=1)
+    return dias
+
+
 def faixas_do_dia(data):
     """Linha do tempo do dia: blocos ocupados e livres dentro do horário da sala."""
     janela = HorarioFuncionamento.do_dia(data)
@@ -232,7 +287,7 @@ def usuarios_disponiveis_para_responsavel(data):
 
 def criar_agendamento(
     usuario, cliente, tipo, data, hora, horas, contato=None, confirmar_blacklist=False,
-    observacao="", agora=None, responsavel=None,
+    observacao="", agora=None, responsavel=None, pratos=False,
 ):
     if cliente.na_blacklist and not (usuario.is_admin and confirmar_blacklist):
         raise ClienteNaBlacklist(cliente)
@@ -257,6 +312,7 @@ def criar_agendamento(
             valor_hora=preco_hora(tipo, cfg),
             criado_por=usuario,
             observacao=observacao,
+            pratos=bool(pratos),
             responsavel=usuario,
             responsavel_convidado=responsavel if pendente else None,
             responsavel_status=Agendamento.RespStatus.PENDENTE if pendente else Agendamento.RespStatus.ACEITO,

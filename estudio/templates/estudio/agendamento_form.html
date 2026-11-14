@@ -1,57 +1,105 @@
 {% extends "estudio/base.html" %}
 {% block titulo %}Novo agendamento{% endblock %}
 {% block topo %}
-<header class="topo compacto"><a class="voltar" href="{% url 'inicio' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Novo agendamento</h1></header>
+<header class="topo compacto">
+<a class="voltar" id="voltar" href="{% url 'inicio' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+<h1>Novo agendamento</h1>
+<span class="sub" id="passo-txt" style="font-size:13px;white-space:nowrap">Passo 1 de 7</span>
+</header>
+<div class="wz-progresso" aria-hidden="true">{% for i in "1234567" %}<i></i>{% endfor %}</div>
+<p class="wz-trilha oculto" id="trilha"></p>
 {% endblock %}
 {% block conteudo %}
-<form method="post" id="form-ag" style="display:flex;flex-direction:column;flex:1">{% csrf_token %}
-<main class="conteudo" style="gap:18px">
+<form method="post" id="form-ag" class="wz" novalidate>{% csrf_token %}
+<input type="hidden" name="tipo" id="f-tipo" value="{{ valores.tipo }}">
+<input type="hidden" name="cliente" id="f-cliente" value="{% if selecionado %}{{ selecionado.pk }}{% endif %}">
+<input type="hidden" name="data" id="f-data" value="{{ valores.data }}">
+<input type="hidden" name="hora" id="f-hora" value="{{ valores.hora }}">
+<input type="hidden" name="horas" id="f-horas" value="{{ valores.horas }}">
+<input type="hidden" name="pratos" id="f-pratos" value="{% if valores.pratos == '1' %}1{% endif %}">
+<input type="hidden" name="responsavel" id="f-resp" value="{{ valores.responsavel }}">
+<main class="conteudo">
 {% if erro %}<div class="erro" role="alert">{{ erro }}</div>{% endif %}
 
-<label class="campo">1 · Dia<input type="date" name="data" id="data" value="{{ valores.data }}" required><small id="janela"></small></label>
+<!-- 1 · Tipo -->
+<section class="wz-passo" data-passo="tipo">
+<h2 class="wz-titulo">O que vai ser?</h2>
+<button type="button" class="wz-cartao" data-tipo="ensaio">
+<span class="wz-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="9" rx="8" ry="3"/><path d="M4 9v6c0 1.7 3.6 3 8 3s8-1.3 8-3V9"/><path d="M15 3l4 4M9 3 5 7"/></svg></span>
+<span class="item-txt"><b class="wz-nome">Ensaio</b><span class="sub">Mínimo {{ cfg.min_horas_ensaio }}h · R$ {{ cfg.preco_ensaio|floatformat:0 }}/hora</span></span>
+</button>
+<button type="button" class="wz-cartao" data-tipo="gravacao">
+<span class="wz-ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg></span>
+<span class="item-txt"><b class="wz-nome">Gravação</b><span class="sub">Mínimo {{ cfg.min_horas_gravacao }}h · R$ {{ cfg.preco_gravacao|floatformat:0 }}/hora</span></span>
+</button>
+</section>
 
-<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">2 · Tipo</legend>
-<div class="grade2">
-<label class="chip"><input type="radio" name="tipo" value="ensaio"{% if valores.tipo != 'gravacao' %} checked{% endif %}><span>Ensaio · R$ {{ cfg.preco_ensaio|floatformat:0 }}/h</span></label>
-<label class="chip"><input type="radio" name="tipo" value="gravacao"{% if valores.tipo == 'gravacao' %} checked{% endif %}><span>Gravação · R$ {{ cfg.preco_gravacao|floatformat:0 }}/h</span></label>
-</div></fieldset>
-
-<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">3 · Duração</legend>
-<div class="chips grade">{% for h in "123456" %}
-<label class="chip"><input type="radio" name="horas" value="{{ h }}"{% if valores.horas|stringformat:"s" == h %} checked{% endif %}><span>{{ h }}h</span></label>{% endfor %}
-</div></fieldset>
-
-<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px" id="titulo-horarios">4 · Horários livres</legend>
-<div class="chips" id="horarios"><span class="sub" style="text-transform:none;letter-spacing:0">Escolha o dia e a duração.</span></div>
-</fieldset>
-
-<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">5 · Responsável por acompanhar</legend>
-<div class="grade3" id="responsaveis"></div>
-<p class="sub" style="margin:8px 0 0;font-size:12px;text-transform:none;letter-spacing:0" id="msg-responsavel"></p>
-</fieldset>
-
-<div class="campo" id="bloco-cliente">6 · Cliente
-<input type="hidden" name="cliente" id="cliente" value="{% if selecionado %}{{ selecionado.pk }}{% endif %}">
-<div id="cliente-sel" class="card fino{% if not selecionado %} oculto{% endif %}" style="display:flex;align-items:center;gap:12px;text-transform:none;letter-spacing:0">
-<span class="av" id="cliente-av">{{ selecionado.inicial }}</span>
-<span class="item-txt"><b id="cliente-nome" style="color:var(--txt)">{{ selecionado.nome }}</b></span>
-<button type="button" class="btn link" id="trocar">Trocar</button>
-</div>
-<div id="cliente-busca"{% if selecionado %} class="oculto"{% endif %} style="display:flex;flex-direction:column;gap:8px">
+<!-- 2 · Cliente -->
+<section class="wz-passo oculto" data-passo="cliente">
+<h2 class="wz-titulo">Pra qual cliente?</h2>
 <input type="search" id="busca" placeholder="Buscar banda ou pessoa…" autocomplete="off" aria-label="Buscar cliente">
-<div class="lista oculto" id="resultados" style="max-height:260px;overflow:auto">
-{% for c in clientes %}<button type="button" class="item cli" data-id="{{ c.pk }}" data-nome="{{ c.nome }}" style="all:unset;box-sizing:border-box;min-height:56px;padding:8px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--linha);cursor:pointer;width:100%"><span class="av">{{ c.inicial }}</span><span style="font-size:15px;font-weight:600;color:var(--txt);text-transform:none;letter-spacing:0">{{ c.nome }}</span></button>{% endfor %}
+<span class="kicker" id="lista-titulo">{% if recentes %}Recentes{% endif %}</span>
+<div class="wz-lista" id="recentes">
+{% for c in recentes %}<button type="button" class="wz-cli" data-id="{{ c.pk }}" data-nome="{{ c.nome }}"><span class="av">{{ c.inicial }}</span><span class="item-txt"><b>{{ c.nome }}</b></span>{% if c.blacklist_manual %}<span class="pilula perigo">Blacklist</span>{% endif %}</button>{% endfor %}
 </div>
-<a class="btn pequeno" href="{% url 'cliente_novo' %}" style="text-transform:none;letter-spacing:0">+ Cadastrar cliente novo</a>
+<div class="wz-lista oculto" id="resultados">
+{% for c in clientes %}<button type="button" class="wz-cli" data-id="{{ c.pk }}" data-nome="{{ c.nome }}"><span class="av">{{ c.inicial }}</span><span class="item-txt"><b>{{ c.nome }}</b></span>{% if c.blacklist_manual %}<span class="pilula perigo">Blacklist</span>{% endif %}</button>{% endfor %}
 </div>
-</div>
+<p class="sub oculto" id="sem-resultado" style="margin:0">Nenhum cliente encontrado.</p>
 <div id="situacao" class="oculto" role="status"></div>
+<button type="button" class="btn ouro oculto" id="cliente-continuar" style="min-height:52px">CONTINUAR</button>
+<a class="btn pequeno" href="{% url 'cliente_novo' %}">+ Cadastrar cliente novo</a>
+</section>
 
-<label class="campo">7 · Observação (opcional)<input type="text" name="observacao" maxlength="255" placeholder="Ex.: vão trazer o próprio amplificador"></label>
-<p class="sub" style="margin:0;font-size:12.5px" id="politica"></p>
+<!-- 3 · Dia (calendário) -->
+<section class="wz-passo oculto" data-passo="dia">
+<h2 class="wz-titulo">Qual dia?</h2>
+<div class="card" style="display:flex;flex-direction:column;gap:10px">
+<div class="linha">
+<button type="button" class="btn icone" id="mes-ant" aria-label="Mês anterior" style="border:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+<b class="mont" id="mes-titulo" style="font-size:17px"></b>
+<button type="button" class="btn icone" id="mes-prox" aria-label="Próximo mês" style="border:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+</div>
+<div class="mes wz-mes" id="calendario"></div>
+</div>
+<p class="sub" style="margin:0;font-size:13px" id="cal-legenda">Dias apagados não têm horário livre.</p>
+</section>
+
+<!-- 4 · Horário -->
+<section class="wz-passo oculto" data-passo="horario">
+<h2 class="wz-titulo">Que horas começa?</h2>
+<p class="sub" style="margin:-6px 0 0" id="dia-titulo"></p>
+<div class="wz-horas" id="inicios"></div>
+<div id="bloco-fins" class="oculto" style="display:flex;flex-direction:column;gap:10px;padding-top:16px;border-top:1px solid var(--linha)">
+<h3 class="wz-titulo" style="font-size:18px">Até que horas?</h3>
+<div class="grade3" id="fins"></div>
+</div>
+</section>
+
+<!-- 5 · Pratos -->
+<section class="wz-passo oculto" data-passo="pratos">
+<h2 class="wz-titulo">Vai alugar pratos?</h2>
+<p class="sub" style="margin:-6px 0 0">Opcional. Aluguel de equipamento do estúdio.</p>
+<div class="grade2">
+<button type="button" class="wz-cartao vertical" data-pratos="1"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--ouro)" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="8" rx="9" ry="2.4"/><path d="M12 5.6V4M12 10.4V21M8 21h8"/></svg><b class="wz-nome">Sim, com pratos</b></button>
+<button type="button" class="wz-cartao vertical" data-pratos="0"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m6.5 17.5 11-11"/></svg><b class="wz-nome">Não precisa</b></button>
+</div>
+<div class="wz-embreve"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span style="flex:1">Aluguel de instrumentos</span><span class="pilula cinza">Em breve</span></div>
+</section>
+
+<!-- 6 · Técnico -->
+<section class="wz-passo oculto" data-passo="tecnico">
+<h2 class="wz-titulo">Quem vai acompanhar?</h2>
+<div class="wz-lista" id="tecnicos"></div>
+</section>
+
+<!-- 7 · Observação -->
+<section class="wz-passo oculto" data-passo="obs">
+<h2 class="wz-titulo">Alguma observação?</h2>
+<label class="campo">Opcional<textarea name="observacao" maxlength="255" rows="3" placeholder="Ex.: a banda traz o próprio pedal de bumbo">{{ valores.observacao }}</textarea></label>
+</section>
 </main>
-<div class="rodape-fixo">
-<div class="linha"><span class="sub" id="resumo">Escolha o horário</span><span class="total" id="total"></span></div>
+<div class="rodape-fixo oculto" id="rodape-confirmar">
 <button class="btn ouro" type="submit" style="min-height:54px">CONFIRMAR AGENDAMENTO</button>
 </div>
 </form>
@@ -59,101 +107,183 @@
 {% block js %}
 <script>
 (()=>{
-const precos={ensaio:{{ cfg.preco_ensaio|floatformat:"0"|default:"70" }},gravacao:{{ cfg.preco_gravacao|floatformat:"0"|default:"400" }}};
+const PASSOS=['tipo','cliente','dia','horario','pratos','tecnico','obs'];
+const HOJE='{{ hoje|date:"Y-m-d" }}';
+const EU_ID='{{ request.user.pk }}', EU_NOME='{{ eu_nome|escapejs }}';
+const preco={ensaio:{{ cfg.preco_ensaio|floatformat:"0"|default:"70" }},gravacao:{{ cfg.preco_gravacao|floatformat:"0"|default:"400" }}};
 const minimo={ensaio:{{ cfg.min_horas_ensaio }},gravacao:{{ cfg.min_horas_gravacao }}};
-const taxa={ensaio:{{ cfg.taxa_ensaio_pct }},gravacao:{{ cfg.taxa_gravacao_pct }}};
-const horaInicial="{{ valores.hora }}";
-const euId="{{ request.user.pk }}";
-const respInicial="{{ valores.responsavel|default:request.user.pk }}";
+const DIAS_C=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const f=document.getElementById('form-ag');
-const $=s=>f.querySelector(s);
-const brl=v=>'R$ '+v.toLocaleString('pt-BR');
-const tipo=()=>($('input[name=tipo]:checked')||{}).value||'ensaio';
-const horas=()=>parseInt(($('input[name=horas]:checked')||{}).value||'0');
-let primeira=true;
-function ajustarDuracao(){
-  const min=minimo[tipo()];
-  f.querySelectorAll('input[name=horas]').forEach(r=>{r.disabled=parseInt(r.value)<min;if(r.disabled&&r.checked)r.checked=false});
-  if(!horas()){const r=[...f.querySelectorAll('input[name=horas]')].find(x=>!x.disabled&&parseInt(x.value)>=min);if(r)r.checked=true}
+const $=id=>document.getElementById(id);
+const campo={tipo:$('f-tipo'),cliente:$('f-cliente'),data:$('f-data'),hora:$('f-hora'),horas:$('f-horas'),pratos:$('f-pratos'),resp:$('f-resp')};
+const est={passo:'tipo',clienteNome:'{{ selecionado.nome|default:""|escapejs }}',pratosEscolhido:{% if valores.pratos %}true{% else %}false{% endif %},tecNome:'',mes:null,
+  pularCliente:!!campo.cliente.value&&!{{ voltou_com_erro|yesno:"true,false" }},pularDia:!!campo.data.value&&!{{ voltou_com_erro|yesno:"true,false" }}};
+const hl=h=>(h%24===0?'00':String(h))+'h';
+const dataObj=s=>{const [a,m,d]=s.split('-').map(Number);return new Date(a,m-1,d)};
+const ddmm=s=>s.slice(8,10)+'/'+s.slice(5,7);
+const norm=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+function irPara(p){
+  est.passo=p;
+  const i=PASSOS.indexOf(p);
+  document.querySelectorAll('.wz-passo').forEach(s=>s.classList.toggle('oculto',s.dataset.passo!==p));
+  document.querySelectorAll('.wz-progresso i').forEach((b,k)=>b.classList.toggle('on',k<=i));
+  $('passo-txt').textContent=`Passo ${i+1} de 7`;
+  $('rodape-confirmar').classList.toggle('oculto',p!=='obs');
+  trilha();
+  window.scrollTo(0,0);
+  if(p==='dia')carregarMes();
+  if(p==='horario')carregarHorarios();
+  if(p==='tecnico')carregarTecnicos();
+  if(p==='cliente'){mostrarSituacao(null);setTimeout(()=>$('busca').focus(),50)}
+  marcarEscolhas();
 }
-async function carregarResponsaveis(){
-  const d=$('#data').value;
-  const box=document.getElementById('responsaveis');
-  const msg=document.getElementById('msg-responsavel');
-  if(!d){box.innerHTML='';msg.textContent='';return}
-  const r=await fetch(`{% url 'responsaveis_json' %}?data=${d}`);const j=await r.json();
-  box.innerHTML='';
-  const outros=j.usuarios.filter(u=>String(u.id)!==euId);
-  const eu=j.usuarios.find(u=>String(u.id)===euId);
-  const ordenados=eu?[...outros,eu]:outros;
-  ordenados.forEach(u=>{
-    const lab=document.createElement('label');lab.className='chip';
-    const desabilitar=u.bloqueado&&String(u.id)!==euId;
-    const souEu=String(u.id)===euId;
-    const bloqueiaTransferencia=!j.pode_transferir&&!souEu;
-    const i=document.createElement('input');i.type='radio';i.name='responsavel';i.value=u.id;
-    i.disabled=desabilitar||bloqueiaTransferencia;
-    if(String(respInicial)===String(u.id)&&!i.disabled)i.checked=true;
-    const s=document.createElement('span');s.textContent=(souEu?'Eu':u.nome)+(u.bloqueado?' · bloqueado':'');
-    lab.append(i,s);box.append(lab)
-  });
-  if(!f.querySelector('input[name=responsavel]:checked')){const eu=f.querySelector(`input[name=responsavel][value="${euId}"]`);if(eu){eu.checked=true}}
-  msg.textContent=j.pode_transferir
-    ? 'Escolhendo outra pessoa: ela recebe um pedido de confirmação no WhatsApp. Sem resposta até 1 dia antes, o convite expira e volta pra você.'
-    : 'Esse ensaio é hoje: só você pode acompanhar. Pra transferir pra outra pessoa, escolha uma data a partir de amanhã.';
+function trilha(){
+  const i=PASSOS.indexOf(est.passo),t=[];
+  if(i>0&&campo.tipo.value)t.push(campo.tipo.value==='gravacao'?'Gravação':'Ensaio');
+  if(i>1&&est.clienteNome)t.push(est.clienteNome);
+  if(i>2&&campo.data.value)t.push(DIAS_C[dataObj(campo.data.value).getDay()]+' '+ddmm(campo.data.value));
+  if(i>3&&campo.hora.value&&campo.horas.value)t.push(hl(+campo.hora.value)+'–'+hl(+campo.hora.value+ +campo.horas.value));
+  if(i>4&&est.pratosEscolhido)t.push(campo.pratos.value?'com pratos':'sem pratos');
+  if(i>5&&est.tecNome)t.push(est.tecNome);
+  $('trilha').textContent=t.join(' · ');$('trilha').classList.toggle('oculto',!t.length);
 }
-async function carregar(){
-  ajustarDuracao();
-  const d=$('#data').value,h=horas(),t=tipo();
-  document.getElementById('politica').textContent=`Cancelar ou remarcar é grátis até 48h antes. Depois disso: taxa de ${taxa[t]}% do valor total.`;
-  const box=document.getElementById('horarios');
-  document.getElementById('titulo-horarios').textContent=h?`4 · Horários livres para ${h}h`:'4 · Horários livres';
-  carregarResponsaveis();
-  if(!d||!h){box.innerHTML='';resumo();return}
-  box.innerHTML='<span class="sub">Carregando…</span>';
-  const r=await fetch(`{% url 'horarios_json' %}?data=${d}&tipo=${t}&horas=${h}`);const j=await r.json();
-  document.getElementById('janela').textContent=j.janela?`Sala aberta das ${String(j.janela[0]).padStart(2,'0')}:00 às ${String(j.janela[1]%24).padStart(2,'0')}:00`:'A sala não funciona nesse dia.';
-  box.innerHTML='';
-  if(!j.livres.length){box.innerHTML='<span class="sub" style="text-transform:none;letter-spacing:0">Nenhum horário livre com essa duração neste dia.</span>'}
-  j.livres.forEach(hh=>{const lab=document.createElement('label');lab.className='chip';
-    const i=document.createElement('input');i.type='radio';i.name='hora';i.value=hh;i.required=true;
-    if(primeira&&String(hh)===horaInicial)i.checked=true;
-    const s=document.createElement('span');s.textContent=String(hh).padStart(2,'0')+':00';
-    lab.append(i,s);box.append(lab)});
-  primeira=false;resumo();
+function marcarEscolhas(){
+  document.querySelectorAll('[data-tipo]').forEach(b=>b.classList.toggle('sel',b.dataset.tipo===campo.tipo.value));
+  document.querySelectorAll('[data-pratos]').forEach(b=>b.classList.toggle('sel',est.pratosEscolhido&&b.dataset.pratos===(campo.pratos.value?'1':'0')));
+  document.querySelectorAll('.wz-cli').forEach(b=>b.classList.toggle('sel',b.dataset.id===campo.cliente.value));
 }
-function resumo(){
-  const t=tipo(),h=horas(),sel=$('input[name=hora]:checked');
-  document.getElementById('total').textContent=h?brl(precos[t]*h):'';
-  const nome=t==='ensaio'?'Ensaio':'Gravação';
-  document.getElementById('resumo').textContent=sel?`${nome} · ${String(sel.value).padStart(2,'0')}:00–${String((+sel.value+h)%24).padStart(2,'0')}:00`:(h?`${nome} · ${h}h`:'Escolha a duração');
-}
-f.addEventListener('change',e=>{if(e.target.name==='hora')resumo();else if(['tipo','horas','data'].includes(e.target.name))carregar()});
-// clientes: só o campo de busca; a lista só aparece depois que a pessoa digita
-const busca=document.getElementById('busca');
-const resultados=document.getElementById('resultados');
-busca&&busca.addEventListener('input',()=>{
-  const q=busca.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  if(!q){resultados.classList.add('oculto');return}
-  resultados.classList.remove('oculto');
-  f.querySelectorAll('.cli').forEach(b=>{const n=b.dataset.nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');b.style.display=n.includes(q)?'flex':'none'})
+$('voltar').addEventListener('click',e=>{const i=PASSOS.indexOf(est.passo);if(i>0){e.preventDefault();irPara(PASSOS[i-1])}});
+
+// 1 · tipo
+document.querySelectorAll('[data-tipo]').forEach(b=>b.addEventListener('click',()=>{
+  if(campo.tipo.value!==b.dataset.tipo){campo.hora.value='';campo.horas.value=''}
+  campo.tipo.value=b.dataset.tipo;
+  if(est.pularCliente&&campo.cliente.value){est.pularCliente=false;irPara(est.pularDia?'horario':'dia');est.pularDia=false;return}
+  irPara('cliente');
+}));
+
+// 2 · cliente
+const busca=$('busca');
+busca.addEventListener('input',()=>{
+  const q=norm(busca.value.trim());
+  $('recentes').classList.toggle('oculto',!!q);
+  $('resultados').classList.toggle('oculto',!q);
+  $('lista-titulo').textContent=q?'Resultados':($('recentes').children.length?'Recentes':'');
+  let n=0;
+  $('resultados').querySelectorAll('.wz-cli').forEach(b=>{const ok=norm(b.dataset.nome).includes(q);b.style.display=ok?'flex':'none';if(ok)n++});
+  $('sem-resultado').classList.toggle('oculto',!q||n>0);
 });
-async function situacao(id){
-  const box=document.getElementById('situacao');box.className='oculto';box.innerHTML='';
-  if(!id)return;
-  const j=await (await fetch(`/clientes/${id}/situacao.json`)).json();
+function mostrarSituacao(html){const box=$('situacao');box.innerHTML=html||'';box.classList.toggle('oculto',!html);$('cliente-continuar').classList.toggle('oculto',!html)}
+document.querySelectorAll('.wz-cli').forEach(b=>b.addEventListener('click',async()=>{
+  campo.cliente.value=b.dataset.id;est.clienteNome=b.dataset.nome;marcarEscolhas();
+  let j=null;try{j=await (await fetch(`/clientes/${b.dataset.id}/situacao.json`)).json()}catch(e){}
   const partes=[];
-  if(j.blacklist)partes.push(`<div class="erro"><b>Cliente na blacklist</b>${j.em_aberto?` · débito de ${j.em_aberto}`:''}. ${j.is_admin?'Você é administrador: ao confirmar, o sistema pede uma confirmação extra.':'Só um administrador pode concluir este agendamento.'}</div>`);
-  j.avisos.forEach(a=>partes.push(`<div class="aviso">${a.replace(/</g,'&lt;')}</div>`));
-  if(partes.length){box.innerHTML=partes.join('');box.className='';box.style.cssText='display:flex;flex-direction:column;gap:8px'}
+  if(j&&j.blacklist)partes.push(`<div class="erro"><b>Cliente na blacklist</b>${j.em_aberto?` · débito de ${j.em_aberto}`:''}. ${j.is_admin?'Você é administrador: ao confirmar, o sistema pede uma confirmação extra.':'Só um administrador pode concluir este agendamento.'}</div>`);
+  if(j)j.avisos.forEach(a=>partes.push(`<div class="aviso">${a.replace(/</g,'&lt;')}</div>`));
+  if(partes.length){mostrarSituacao('<div style="display:flex;flex-direction:column;gap:8px">'+partes.join('')+'</div>');$('situacao').scrollIntoView({block:'center'});return}
+  proximoDoCliente();
+}));
+function proximoDoCliente(){if(est.pularDia&&campo.data.value){est.pularDia=false;irPara('horario')}else irPara('dia')}
+$('cliente-continuar').addEventListener('click',proximoDoCliente);
+
+// 3 · dia (calendário)
+const MAX_MESES=6;
+function mesDe(s){return s.slice(0,7)}
+function somaMes(m,n){let [a,mm]=m.split('-').map(Number);mm+=n;a+=Math.floor((mm-1)/12);mm=((mm-1)%12+12)%12+1;return a+'-'+String(mm).padStart(2,'0')}
+function difMes(a,b){const [a1,m1]=a.split('-').map(Number),[a2,m2]=b.split('-').map(Number);return (a2-a1)*12+(m2-m1)}
+async function carregarMes(){
+  if(!est.mes)est.mes=mesDe(campo.data.value||HOJE);
+  const m=est.mes,tipo=campo.tipo.value||'ensaio';
+  $('mes-ant').disabled=difMes(mesDe(HOJE),m)<=0;$('mes-prox').disabled=difMes(mesDe(HOJE),m)>=MAX_MESES;
+  $('cal-legenda').textContent=`Dias apagados não têm horário livre para ${tipo==='gravacao'?'gravação (mín. '+minimo.gravacao+'h)':'ensaio (mín. '+minimo.ensaio+'h)'}.`;
+  const cal=$('calendario');cal.innerHTML='<span class="sub" style="grid-column:1/-1;text-align:center;padding:20px 0">Carregando…</span>';
+  let j;try{j=await (await fetch(`{% url 'dias_json' %}?tipo=${tipo}&mes=${m}`)).json()}catch(e){cal.innerHTML='<span class="erro" style="grid-column:1/-1">Não consegui carregar a agenda. Tente de novo.</span>';return}
+  if(est.mes!==m)return;
+  $('mes-titulo').textContent=j.titulo;
+  const livres=new Set(j.dias);
+  cal.innerHTML='';
+  ['D','S','T','Q','Q','S','S'].forEach(l=>{const c=document.createElement('span');c.className='cab';c.textContent=l;cal.append(c)});
+  const [a,mm]=m.split('-').map(Number);const lead=new Date(a,mm-1,1).getDay();const n=new Date(a,mm,0).getDate();
+  for(let k=0;k<lead;k++)cal.append(document.createElement('span'));
+  for(let d=1;d<=n;d++){
+    const iso=`${m}-${String(d).padStart(2,'0')}`;
+    const b=document.createElement('button');b.type='button';b.textContent=d;
+    const ok=livres.has(iso);b.disabled=!ok;
+    if(iso===HOJE)b.classList.add('hoje');
+    if(iso===campo.data.value)b.classList.add('sel');
+    b.setAttribute('aria-label',`${d}/${mm}${ok?'':' sem horário livre'}`);
+    b.addEventListener('click',()=>{if(campo.data.value!==iso){campo.hora.value='';campo.horas.value='';campo.resp.value='';est.tecNome=''}campo.data.value=iso;irPara('horario')});
+    cal.append(b);
+  }
 }
-f.querySelectorAll('.cli').forEach(b=>b.addEventListener('click',()=>{
-  $('#cliente').value=b.dataset.id;document.getElementById('cliente-nome').textContent=b.dataset.nome;
-  document.getElementById('cliente-av').textContent=b.dataset.nome.charAt(0).toUpperCase();
-  document.getElementById('cliente-sel').classList.remove('oculto');document.getElementById('cliente-busca').classList.add('oculto');situacao(b.dataset.id)}));
-document.getElementById('trocar').addEventListener('click',()=>{document.getElementById('cliente-sel').classList.add('oculto');document.getElementById('cliente-busca').classList.remove('oculto');resultados.classList.add('oculto');busca.value='';busca.focus()});
-f.addEventListener('submit',e=>{if(!$('#cliente').value){e.preventDefault();const box=document.getElementById('situacao');box.className='';box.innerHTML='<div class="erro" role="alert">Escolha o cliente antes de confirmar.</div>';busca.focus()}});
-situacao($('#cliente').value);carregar();
+$('mes-ant').addEventListener('click',()=>{est.mes=somaMes(est.mes,-1);carregarMes()});
+$('mes-prox').addEventListener('click',()=>{est.mes=somaMes(est.mes,1);carregarMes()});
+
+// 4 · horário
+let inicios=[];
+async function carregarHorarios(){
+  const box=$('inicios');box.innerHTML='<span class="sub">Carregando…</span>';$('bloco-fins').classList.add('oculto');
+  const tipo=campo.tipo.value||'ensaio';
+  const j=await (await fetch(`{% url 'inicios_json' %}?data=${campo.data.value}&tipo=${tipo}`)).json();
+  inicios=j.inicios;$('dia-titulo').textContent=j.dia;
+  box.innerHTML='';
+  if(!inicios.length){box.innerHTML='<span class="sub" style="grid-column:1/-1">Esse dia não tem mais horário livre. Volte e escolha outro dia.</span>';return}
+  const horaPre=campo.hora.value?+campo.hora.value:null;
+  inicios.forEach(it=>{
+    const b=document.createElement('button');b.type='button';b.className='wz-hora';b.textContent=hl(it.hora);
+    if(it.hora===horaPre)b.classList.add('sel');
+    b.addEventListener('click',()=>{campo.hora.value=it.hora;campo.horas.value='';box.querySelectorAll('.wz-hora').forEach(x=>x.classList.toggle('sel',x===b));mostrarFins(it)});
+    box.append(b);
+  });
+  const pre=inicios.find(it=>it.hora===horaPre);if(pre)mostrarFins(pre);
+}
+function mostrarFins(it){
+  const box=$('fins');box.innerHTML='';const tipo=campo.tipo.value||'ensaio';
+  it.fins.forEach(fim=>{
+    const h=fim-it.hora;
+    const b=document.createElement('button');b.type='button';b.className='wz-fim';
+    b.innerHTML=`<b>${hl(fim)}</b><span>${h}h · R$ ${(h*preco[tipo]).toLocaleString('pt-BR')}</span>`;
+    b.addEventListener('click',()=>{campo.horas.value=h;irPara('pratos')});
+    box.append(b);
+  });
+  $('bloco-fins').classList.remove('oculto');$('bloco-fins').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// 5 · pratos
+document.querySelectorAll('[data-pratos]').forEach(b=>b.addEventListener('click',()=>{campo.pratos.value=b.dataset.pratos==='1'?'1':'';est.pratosEscolhido=true;irPara('tecnico')}));
+
+// 6 · técnico
+async function carregarTecnicos(){
+  const box=$('tecnicos');box.innerHTML='<span class="sub">Carregando…</span>';
+  const j=await (await fetch(`{% url 'responsaveis_json' %}?data=${campo.data.value}`)).json();
+  box.innerHTML='';
+  const eu=j.usuarios.find(u=>String(u.id)===EU_ID);
+  const lista=eu?[eu,...j.usuarios.filter(u=>u!==eu)]:j.usuarios;
+  lista.forEach(u=>{
+    const souEu=String(u.id)===EU_ID;
+    const nome=souEu?`${EU_NOME} (você)`:u.nome.split(' ')[0];
+    let motivo='';
+    if(!souEu&&!j.pode_transferir)motivo='Só dá pra direcionar a partir de amanhã';
+    else if(!souEu&&u.bloqueado)motivo='Dia impedido';
+    const b=document.createElement('button');b.type='button';b.className='wz-cli';b.disabled=!!motivo;
+    if(String(u.id)===campo.resp.value)b.classList.add('sel');
+    const ini=(u.nome||'?').slice(0,2).toUpperCase();
+    b.innerHTML=`<span class="av${motivo?'':' cheio'}">${ini}</span><span class="item-txt"><b></b><span class="sub" style="font-size:13px${motivo?';color:var(--perigo)':''}"></span></span>`;
+    b.querySelector('b').textContent=nome;
+    b.querySelector('.sub').textContent=motivo||(souEu?'Você mesmo acompanha':'Recebe convite pra aceitar');
+    b.addEventListener('click',()=>{campo.resp.value=u.id;est.tecNome=souEu?EU_NOME:u.nome.split(' ')[0];irPara('obs')});
+    box.append(b);
+  });
+}
+
+f.addEventListener('submit',e=>{
+  const falta=[['tipo','tipo'],['cliente','cliente'],['data','dia'],['hora','horario'],['horas','horario']].find(([c])=>!campo[c].value);
+  if(falta){e.preventDefault();irPara(falta[1]);return}
+  if(!campo.resp.value)campo.resp.value=EU_ID;
+});
+
+{% if voltou_com_erro %}irPara('obs');{% else %}irPara('tipo');{% endif %}
 })();
 </script>
 {% endblock %}

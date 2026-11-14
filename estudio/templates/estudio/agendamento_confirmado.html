@@ -1,0 +1,29 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="padding-top:calc(48px + env(safe-area-inset-top));gap:18px">
+<div class="ok-selo" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0A0A0A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+<div class="centro" style="display:flex;flex-direction:column;gap:6px">
+<h1 style="margin:0;font-size:24px">{{ titulo }}</h1>
+<p class="sub" style="margin:0;font-size:15px">{{ resumo }}</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+{% if link_cliente %}
+<a class="btn whats" href="{{ link_cliente }}" target="_blank" rel="noopener">{% include "estudio/_icone_whats.html" with tam=22 %}<span style="flex:1">Disparar lembrete ao cliente</span></a>
+{% else %}
+<div class="aviso">Esse cliente não tem WhatsApp cadastrado. Cadastre na ficha do cliente pra mandar o lembrete.</div>
+{% endif %}
+{% if tecnico_sou_eu %}
+<p class="sub centro" style="margin:0;font-size:13px">Você mesmo acompanha, não precisa de comunicado.</p>
+{% elif link_tecnico %}
+<a class="btn whats neutro" href="{{ link_tecnico }}" target="_blank" rel="noopener">{% include "estudio/_icone_whats.html" with tam=22 %}<span style="flex:1">Enviar comunicado a {{ tecnico_nome }}</span></a>
+{% elif tecnico %}
+<div class="aviso">{{ tecnico_nome }} não tem telefone cadastrado em Configurações → Usuários.</div>
+{% endif %}
+</div>
+</main>
+<div class="rodape-fixo" style="flex-direction:row">
+<a class="btn" href="{% url 'agendamento_novo' %}">Novo agendamento</a>
+<a class="btn ouro" href="{% url 'agendamento' ag.pk %}">CONCLUIR</a>
+</div>
+{% endblock %}

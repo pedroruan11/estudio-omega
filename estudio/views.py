@@ -8,7 +8,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -33,6 +33,7 @@ from .models import (
 
 DIAS_CURTOS = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"]
 DIAS_LONGOS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+DIAS_FEIRA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
 ENDERECO = "Av. dos Autonomistas, 4905, sala 7 – Osasco"
 DIAS_DISPONIVEIS = 20  # varinha mágica da Agenda: horários livres dos próximos 20 dias
@@ -421,6 +422,30 @@ def horarios_json(request):
 
 
 @login_required
+def dias_json(request):
+    """Calendário do novo agendamento: dias do mês com horário livre pro tipo."""
+    tipo = request.GET.get("tipo", "ensaio")
+    try:
+        ano, mes = (int(x) for x in request.GET.get("mes", "").split("-"))
+        date(ano, mes, 1)
+    except (TypeError, ValueError):
+        hoje = timezone.localdate()
+        ano, mes = hoje.year, hoje.month
+    dias = regras.dias_com_vaga(ano, mes, tipo)
+    return JsonResponse({"dias": [d.isoformat() for d in dias], "titulo": f"{MESES[mes - 1].capitalize()} {ano}"})
+
+
+@login_required
+def inicios_json(request):
+    """Horários do dia: inícios livres e, pra cada um, até que horas dá pra ir."""
+    data = parse_data(request.GET.get("data"))
+    tipo = request.GET.get("tipo", "ensaio")
+    if not data:
+        return JsonResponse({"inicios": [], "dia": ""})
+    return JsonResponse({"inicios": regras.inicios_com_fins(data, tipo), "dia": dia_feira(data)})
+
+
+@login_required
 def responsaveis_json(request):
     data = parse_data(request.GET.get("data"))
     if not data:
@@ -451,6 +476,45 @@ def primeiro_nome(pessoa):
     nome = pessoa.get_full_name() if hasattr(pessoa, "get_full_name") else str(pessoa)
     nome = nome or (pessoa.username if hasattr(pessoa, "username") else str(pessoa))
     return nome.split()[0] if nome else ""
+
+
+def dia_feira(d):
+    return f"{DIAS_FEIRA[d.weekday()]}, {d:%d/%m}"
+
+
+def _hora_txt(h):
+    return "00h" if h == 0 else f"{h}h"
+
+
+def _quando_feira(ag):
+    ini, fim = timezone.localtime(ag.inicio), timezone.localtime(ag.fim)
+    return f"{dia_feira(ini.date())}, das {_hora_txt(ini.hour)} às {_hora_txt(fim.hour)}"
+
+
+def texto_confirmacao_cliente(ag):
+    """Mensagem automática de confirmação (tela final do novo agendamento). Cita a taxa em %, nunca o valor."""
+    pct = regras.percentual_taxa(ag.tipo)
+    return (
+        f"{ag.cliente.nome}, esta é uma mensagem automática de confirmação.\n\n"
+        f"Agendamento de {ag.get_tipo_display().lower()}: {_quando_feira(ag)}.\n\n"
+        f"Importante: Caso precise cancelar, avise com no mínimo 48h de antecedência. "
+        f"Cancelamentos fora desse prazo estão sujeitos à cobrança de {pct}% do valor reservado, "
+        f"visto que recusamos outras bandas para manter a sala exclusiva para você.\n\n"
+        f"Obrigado e muito som 🤘"
+    )
+
+
+def texto_comunicado_tecnico(ag, tecnico):
+    artigo = "a gravação" if ag.tipo == Agendamento.Tipo.GRAVACAO else "o ensaio"
+    linhas = [
+        f"Oi, {primeiro_nome(tecnico)}! Você foi escolhido pra acompanhar {artigo} de {ag.cliente} · {_quando_feira(ag)}.",
+        f"Pratos: {'sim' if ag.pratos else 'não'}.",
+    ]
+    if ag.observacao:
+        linhas.append(f"Obs.: {ag.observacao}")
+    if ag.responsavel_convidado_id == tecnico.pk:
+        linhas.append("Aceita lá no app, em Meu Calendário.")
+    return "\n".join(linhas)
 
 
 def _resumo(ag):
@@ -535,15 +599,15 @@ def link_whatsapp_responsavel_recusado(ag, convidado, avisar):
 
 @login_required
 def agendamento_novo(request):
+    """Novo agendamento passo a passo: Tipo → Cliente → Dia → Horário → Pratos → Técnico → Observação."""
     cfg = Configuracao.atual()
     inicial = {
-        "tipo": request.GET.get("tipo", "ensaio"),
-        "data": request.GET.get("data") or timezone.localdate().isoformat(),
-        "horas": request.GET.get("horas", 2),
+        "tipo": request.GET.get("tipo", ""),
+        "data": request.GET.get("data", ""),
         "hora": request.GET.get("hora", ""),
         "cliente": request.GET.get("cliente", ""),
     }
-    form = AgendamentoForm(request.POST or None, initial=inicial)
+    form = AgendamentoForm(request.POST or None)
     erro = None
     if request.method == "POST" and form.is_valid():
         c = form.cleaned_data
@@ -551,38 +615,70 @@ def agendamento_novo(request):
             ag = regras.criar_agendamento(
                 request.user, c["cliente"], c["tipo"], c["data"], c["hora"], c["horas"],
                 confirmar_blacklist=c["confirmar_blacklist"], observacao=c["observacao"],
-                responsavel=c.get("responsavel") or request.user,
+                responsavel=c.get("responsavel") or request.user, pratos=c["pratos"],
             )
         except regras.ClienteNaBlacklist as e:
             return render(request, "estudio/blacklist_alerta.html", _contexto_blacklist(request, e.cliente, form.data))
         except regras.RegraErro as e:
             erro = str(e)
         else:
-            messages.success(request, "Agendamento confirmado.")
-            return redirect(reverse("agendamento", args=[ag.pk]) + "?novo=1")
+            return redirect("agendamento_confirmado", ag.pk)
     elif request.method == "POST":
-        erro = "Confira os campos: cliente, tipo, dia, duração, horário e responsável."
+        erro = "Faltou alguma escolha: confira tipo, cliente, dia, horário e técnico."
+    d = form.data if form.is_bound else inicial
+    valores = {
+        "tipo": d.get("tipo", ""),
+        "cliente": d.get("cliente", ""),
+        "data": d.get("data", ""),
+        "hora": d.get("hora", ""),
+        "horas": d.get("horas", "") if form.is_bound else "",
+        "pratos": "1" if form.is_bound and d.get("pratos") else ("0" if form.is_bound else ""),
+        "responsavel": d.get("responsavel", "") if form.is_bound else "",
+        "observacao": d.get("observacao", "") if form.is_bound else "",
+    }
+    selecionado = Cliente.objects.filter(pk=valores["cliente"]).first() if str(valores["cliente"]).isdigit() else None
     clientes = Cliente.objects.order_by("nome").only("id", "nome", "blacklist_manual")
-    selecionado = None
-    cid = form.data.get("cliente") if form.is_bound else inicial["cliente"]
-    if cid:
-        selecionado = Cliente.objects.filter(pk=cid).first()
-    data_inicial = form.data.get("data") if form.is_bound else inicial["data"]
-    data_obj = parse_data(data_inicial, timezone.localdate())
+    recentes = (
+        Cliente.objects.annotate(ultimo=Max("agendamentos__criado_em"))
+        .filter(ultimo__isnull=False).order_by("-ultimo").only("id", "nome", "blacklist_manual")[:5]
+    )
+    hoje = timezone.localdate()
     return render(request, "estudio/agendamento_form.html", {
-        "form": form,
         "erro": erro,
         "clientes": clientes,
+        "recentes": recentes,
         "selecionado": selecionado,
-        "valores": {"tipo": form.data.get("tipo") if form.is_bound else inicial["tipo"],
-                    "data": data_inicial,
-                    "horas": form.data.get("horas") if form.is_bound else inicial["horas"],
-                    "hora": form.data.get("hora") if form.is_bound else inicial["hora"],
-                    "responsavel": form.data.get("responsavel") if form.is_bound else str(request.user.pk)},
-        "usuarios": regras.usuarios_disponiveis_para_responsavel(data_obj),
-        "pode_transferir": regras.pode_transferir_responsavel(data_obj),
+        "valores": valores,
+        "voltou_com_erro": form.is_bound,
+        "hoje": hoje,
+        "eu_nome": primeiro_nome(request.user),
         "cfg": cfg,
         "aba": "novo",
+    })
+
+
+@login_required
+def agendamento_confirmado(request, pk):
+    """Tela final do novo agendamento: dispara o lembrete pro cliente e o comunicado pro técnico."""
+    ag = get_object_or_404(
+        Agendamento.objects.select_related("cliente", "contato", "responsavel", "responsavel_convidado"), pk=pk
+    )
+    ini, fim = timezone.localtime(ag.inicio), timezone.localtime(ag.fim)
+    tecnico = ag.responsavel_convidado or ag.responsavel
+    tecnico_sou_eu = bool(tecnico and tecnico.pk == request.user.pk)
+    link_tecnico = ""
+    if tecnico and not tecnico_sou_eu:
+        link_tecnico = link_whatsapp_numero(tecnico.telefone, texto_comunicado_tecnico(ag, tecnico))
+    return render(request, "estudio/agendamento_confirmado.html", {
+        "ag": ag,
+        "titulo": "Gravação agendada" if ag.tipo == Agendamento.Tipo.GRAVACAO else "Ensaio agendado",
+        "resumo": f"{ag.cliente} · {DIAS_CURTOS[ini.weekday()].capitalize()} {ini:%d/%m} · {_hora_txt(ini.hour)}–{_hora_txt(fim.hour)}",
+        "link_cliente": link_whatsapp(ag.contato, texto_confirmacao_cliente(ag)),
+        "tecnico": tecnico,
+        "tecnico_nome": primeiro_nome(tecnico) if tecnico else "",
+        "tecnico_sou_eu": tecnico_sou_eu,
+        "link_tecnico": link_tecnico,
+        "sem_nav": True,
     })
 
 

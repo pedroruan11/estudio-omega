@@ -53,6 +53,7 @@ class AgendamentoForm(forms.Form):
     horas = forms.IntegerField(min_value=1, max_value=12)
     responsavel = forms.ModelChoiceField(queryset=Usuario.objects.filter(is_active=True), required=False)
     observacao = forms.CharField(max_length=255, required=False)
+    pratos = forms.BooleanField(required=False)
     confirmar_blacklist = forms.BooleanField(required=False)
 
 

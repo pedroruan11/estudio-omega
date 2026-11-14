@@ -230,6 +230,64 @@ class TelasTest(Base):
         self.assertEqual(r.status_code, 302, getattr(r, "content", b"")[:500])
         self.assertTrue(Agendamento.objects.filter(cliente=self.fire, horas=2).exists())
 
+    def test_agendar_passo_a_passo_com_pratos_e_tela_final(self):
+        self.client.force_login(self.edicao)
+        r = self.client.post(reverse("agendamento_novo"), {
+            "cliente": self.fire.pk, "tipo": "ensaio", "data": "2030-01-12", "hora": "10", "horas": "2",
+            "pratos": "1", "observacao": "traz pedal",
+        })
+        ag = Agendamento.objects.get(cliente=self.fire)
+        self.assertRedirects(r, reverse("agendamento_confirmado", args=[ag.pk]))
+        self.assertTrue(ag.pratos)
+        r = self.client.get(reverse("agendamento_confirmado", args=[ag.pk]))
+        self.assertContains(r, "Ensaio agendado")
+        self.assertContains(r, "Disparar lembrete ao cliente")
+        self.assertContains(r, "Você mesmo acompanha")
+        r = self.client.get(reverse("agendamento", args=[ag.pk]))
+        self.assertContains(r, "Pratos")
+
+    def test_textos_da_tela_final(self):
+        from . import views
+        ag = self.agendar(data=SAB, hora=18, horas=2)
+        txt = views.texto_confirmacao_cliente(ag)
+        self.assertIn("FIRE, esta é uma mensagem automática de confirmação.", txt)
+        self.assertIn("Agendamento de ensaio: Sábado, 12/01, das 18h às 20h.", txt)
+        self.assertIn("75% do valor reservado", txt)
+        self.assertTrue(txt.endswith("Obrigado e muito som 🤘"))
+        grav = self.agendar(data=SAB, hora=9, horas=1, tipo="gravacao")
+        self.assertIn("Agendamento de gravação: Sábado, 12/01, das 9h às 10h.", views.texto_confirmacao_cliente(grav))
+        self.assertIn("50% do valor reservado", views.texto_confirmacao_cliente(grav))
+        tarde = self.agendar(data=SEG, hora=22, horas=2)
+        self.assertIn("das 22h às 00h", views.texto_confirmacao_cliente(tarde))
+
+    def test_comunicado_ao_tecnico(self):
+        self.edicao.telefone = "5511949869080"
+        self.edicao.save()
+        self.client.force_login(self.admin)
+        ag = regras.criar_agendamento(self.admin, self.fire, "ensaio", SAB, 18, 2, agora=ANTES,
+                                      responsavel=self.edicao, pratos=True)
+        r = self.client.get(reverse("agendamento_confirmado", args=[ag.pk]))
+        self.assertContains(r, "Enviar comunicado a")
+        self.assertContains(r, "wa.me/5511949869080")
+
+    def test_calendario_e_horarios_do_passo_a_passo(self):
+        self.agendar(data=SEG, hora=18, horas=6)  # segunda lotada
+        self.agendar(data=SAB, hora=9, horas=4)  # 9–13
+        dias = regras.dias_com_vaga(2030, 1, "ensaio", agora=ANTES)
+        self.assertNotIn(SEG, dias)
+        self.assertIn(SAB, dias)
+        inicios = regras.inicios_com_fins(SAB, "ensaio", agora=ANTES)
+        self.assertEqual(inicios[0], {"hora": 13, "fins": [15, 16, 17, 18, 19]})
+        self.assertEqual(inicios[-1], {"hora": 21, "fins": [23]})
+        grav = regras.inicios_com_fins(SAB, "gravacao", agora=ANTES)
+        self.assertEqual(grav[-1], {"hora": 22, "fins": [23]})
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("dias_json"), {"tipo": "ensaio", "mes": "2030-01"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["titulo"], "Janeiro 2030")
+        r = self.client.get(reverse("inicios_json"), {"tipo": "ensaio", "data": "2030-01-12"})
+        self.assertEqual(r.json()["dia"], "Sábado, 12/01")
+
     def test_cadastro_detecta_telefone_existente(self):
         self.client.force_login(self.edicao)
         r = self.client.post(reverse("cliente_novo"), {

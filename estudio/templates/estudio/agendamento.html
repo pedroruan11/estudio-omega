@@ -38,6 +38,7 @@
 <div><span>Horário</span><span>{{ ini|time:"H:i" }} às {{ fim|time:"H:i" }} ({{ ag.horas }}h)</span></div>
 <div><span>Valor</span><span>{{ valor }}</span></div>
 {% if ag.contato %}<div><span>Contato</span><span>{{ ag.contato.nome }} · {{ ag.contato.whatsapp_formatado }}</span></div>{% endif %}
+{% if ag.pratos %}<div><span>Aluguel</span><span>Pratos</span></div>{% endif %}
 {% if ag.observacao %}<div><span>Observação</span><span>{{ ag.observacao }}</span></div>{% endif %}
 <div><span>Quem acompanha</span><span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right"><b>{{ ag.responsavel|default:ag.criado_por|default:"—" }}</b>{% if ag.responsavel_pendente and ag.responsavel_convidado %}<span class="pilula">Aguardando {{ ag.responsavel_convidado }}</span>{% endif %}</span></div>
 <div><span>Agendado por</span><span>{{ ag.criado_por|default:"—" }} · {{ ag.criado_em|date:"d/m H:i" }}</span></div>
