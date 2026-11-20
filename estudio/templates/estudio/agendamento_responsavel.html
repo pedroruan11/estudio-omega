@@ -20,6 +20,7 @@
 
 {% if pode_transferir %}
 <form method="post" style="display:flex;flex-direction:column;gap:12px">{% csrf_token %}
+{% if outros_do_dia %}<div class="card fino" style="font-size:13.5px">Um técnico por dia: o convite vale também pros outros agendamentos desse dia — {{ outros_do_dia|join:", " }}.</div>{% endif %}
 <span class="kicker">Passar pra</span>
 <div class="grade3">
 {% for item in usuarios %}{% if not item.atual %}

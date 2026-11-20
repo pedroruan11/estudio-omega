@@ -231,3 +231,10 @@ nav.barra>a.fab:active{background:var(--ouro2)}
 .ok-selo{width:64px;height:64px;border-radius:50%;background:var(--ouro);display:flex;align-items:center;justify-content:center;align-self:center}
 .btn.whats{justify-content:flex-start;border:1.5px solid #25D366;min-height:56px;font-size:15px;text-align:left}
 .btn.whats.neutro{border-color:var(--linha2)}
+/* travar agenda (20/11/2026) */
+.slot.travado,.card.travado{background:repeating-linear-gradient(135deg,#141312 0 10px,#1A1714 10px 20px);border:1px solid #3A2F24;color:var(--mute)}
+.slot.travado b{color:var(--txt2)}
+.mes a.trav{border-style:dashed;border-color:#6B5A43}
+.mes a.trav .cad{width:11px;height:11px;color:var(--ouro)}
+.lm-linha.trav .lm-cliente{color:var(--mute)}
+.btn-travar{color:var(--ouro)}

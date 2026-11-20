@@ -30,6 +30,7 @@ from .models import (
     Contato,
     Debito,
     HorarioFuncionamento,
+    TravamentoAgenda,
     Usuario,
     Vinculo,
 )
@@ -39,7 +40,7 @@ log = logging.getLogger(__name__)
 MANTER_AUTOMATICOS = 12  # um ano de backups mensais
 MANTER_MANUAIS = 30
 # Ordem para apagar antes de restaurar (dependentes primeiro).
-MODELOS_RESTAURACAO = [Debito, Agendamento, Anotacao, Vinculo, Cliente, Contato, HorarioFuncionamento, Configuracao, Usuario]
+MODELOS_RESTAURACAO = [TravamentoAgenda, Debito, Agendamento, Anotacao, Vinculo, Cliente, Contato, HorarioFuncionamento, Configuracao, Usuario]
 
 
 def _exportar_json():

@@ -26,6 +26,7 @@ from .models import (
     Contato,
     Debito,
     HorarioFuncionamento,
+    TravamentoAgenda,
     Usuario,
     Vinculo,
     normalizar_whatsapp,
@@ -155,6 +156,8 @@ def _ocupacao(data):
     ini = regras.inicio_em(data, janela[0])
     fim = regras.inicio_em(data, 0) + timedelta(hours=janela[1])
     usadas = Agendamento.objects.no_intervalo(ini, fim).aggregate(h=Sum("horas"))["h"] or 0
+    for t in regras.travamentos_no_intervalo(ini, fim):
+        usadas += int((min(t.fim, fim) - max(t.inicio, ini)).total_seconds() // 3600)
     return usadas, total
 
 
@@ -178,6 +181,8 @@ def _faixas_contexto(data, usuario=None):
     for f in faixas:
         f["ini"] = timezone.localtime(f["inicio"])
         f["fim_l"] = timezone.localtime(f["fim"])
+        if f.get("travado"):
+            continue
         if not f["livre"]:
             cli = f["ag"].cliente
             multa = cli.total_em_aberto()
@@ -234,7 +239,7 @@ def inicio(request):
         "hoje": hoje,
         "dia_curto": f"{DIAS_CURTOS[hoje.weekday()]} · {hoje:%d} {MESES[hoje.month - 1][:3].upper()}",
         "faixas": faixas,
-        "qtd": sum(1 for f in faixas if not f["livre"]),
+        "qtd": sum(1 for f in faixas if not f["livre"] and not f.get("travado")),
         "ocupadas": ocupadas,
         "livres": livres,
         "janela_txt": texto_janela(janela),
@@ -353,6 +358,8 @@ def agenda_mes(request):
     for ag in Agendamento.objects.ativos().filter(inicio__gte=ini, inicio__lt=fim).only("inicio", "horas"):
         d = timezone.localdate(ag.inicio)
         contagem[d] = contagem.get(d, 0) + ag.horas
+    travas = list(TravamentoAgenda.objects.filter(data__gte=base, data__lte=base.replace(day=ultimo)).order_by("data", "periodo"))
+    dias_travados = {t.data for t in travas}
     semanas = []
     for semana in calendar.Calendar(firstweekday=0).monthdatescalendar(base.year, base.month):
         linha = []
@@ -361,7 +368,8 @@ def agenda_mes(request):
             total = (janela[1] - janela[0]) if janela else 0
             h = contagem.get(d, 0)
             nivel = 0 if not h else (3 if total and h >= total else (2 if total and h >= total / 2 else 1))
-            linha.append({"data": d, "fora": d.month != base.month, "horas": h, "nivel": nivel, "hoje": d == hoje})
+            linha.append({"data": d, "fora": d.month != base.month, "horas": h, "nivel": nivel, "hoje": d == hoje,
+                          "travado": d in dias_travados})
         semanas.append(linha)
     ant = (base - timedelta(days=1)).replace(day=1)
     prox = base.replace(day=ultimo) + timedelta(days=1)
@@ -388,6 +396,14 @@ def agenda_mes(request):
                 "fim": timezone.localtime(ag.fim),
             })
             dia_atual = d
+        for t in travas:
+            linhas.append({"trav": t, "data": t.data, "dia_semana": DIAS_CURTOS[t.data.weekday()].capitalize(),
+                           "fds": t.data.weekday() >= 5, "ini": timezone.localtime(t.inicio), "fim": timezone.localtime(t.fim)})
+        linhas.sort(key=lambda l: (l["data"], l["ini"]))
+        dia_atual = None
+        for l in linhas:
+            l["nova_dia"] = l["data"] != dia_atual
+            dia_atual = l["data"]
     return render(request, "estudio/agenda_mes.html", {
         "semanas": semanas,
         "linhas": linhas,
@@ -455,7 +471,13 @@ def responsaveis_json(request):
         {"id": u.pk, "nome": u.get_full_name() or u.username, "bloqueado": u.pk in bloqueados}
         for u in Usuario.objects.filter(is_active=True).order_by("first_name", "username")
     ]
-    return JsonResponse({"usuarios": usuarios, "pode_transferir": regras.pode_transferir_responsavel(data)})
+    escala = regras.escala_do_dia(data)
+    fixo = None
+    if escala:
+        r, c = escala["responsavel"], escala["convidado"]
+        fixo = {"id": r.pk, "nome": r.get_full_name() or r.username,
+                "convidado": (c.get_full_name() or c.username) if c else ""}
+    return JsonResponse({"usuarios": usuarios, "pode_transferir": regras.pode_transferir_responsavel(data), "fixo": fixo})
 
 
 # ---------- agendamentos ----------
@@ -1029,9 +1051,10 @@ def agendamento_responsavel(request, pk):
         Agendamento.objects.select_related("cliente", "criado_por", "responsavel", "responsavel_convidado"), pk=pk
     )
     if not ag.pode_trocar_responsavel(request.user):
-        messages.error(request, "Só quem fez o agendamento ou quem está acompanhando pode trocar o responsável.")
+        messages.error(request, "Só o técnico escalado nesse dia pode passar pra outro.")
         return redirect("agendamento", pk=pk)
     data = timezone.localdate(ag.inicio)
+    outros_do_dia = list(regras.agendamentos_do_dia(data, ignorar_id=ag.pk).select_related("cliente"))
     if request.method == "POST":
         try:
             if request.POST.get("acao") == "cancelar_convite":
@@ -1060,7 +1083,55 @@ def agendamento_responsavel(request, pk):
         "dia": data_extenso(data),
         "usuarios": usuarios,
         "pode_transferir": regras.pode_transferir_responsavel(data),
+        "outros_do_dia": [
+            f"{a.cliente} ({timezone.localtime(a.inicio):%H}h–{timezone.localtime(a.fim):%H}h)" for a in outros_do_dia
+        ],
     })
+
+
+# ---------- travar agenda (só administrador) ----------
+
+@admin_required
+def travar_agenda(request):
+    hoje = timezone.localdate()
+    valores = {"data": request.GET.get("data", ""), "periodo": "", "motivo": "", "observacao": ""}
+    erro = None
+    if request.method == "POST":
+        valores = {k: request.POST.get(k, "") for k in valores}
+        try:
+            t = regras.travar_agenda(request.user, parse_data(valores["data"]), valores["periodo"],
+                                     valores["motivo"], valores["observacao"].strip())
+        except regras.RegraErro as e:
+            erro = str(e)
+        else:
+            messages.success(request, f"Agenda travada: {data_extenso(t.data)} · {t.get_periodo_display().lower()} · {t.get_motivo_display()}.")
+            return redirect("travar_agenda")
+    travas = [
+        {"t": t, "dia": f"{DIAS_CURTOS[t.data.weekday()].capitalize()} {t.data:%d/%m}"}
+        for t in regras.travamentos_futuros()
+    ]
+    return render(request, "estudio/travar_agenda.html", {
+        "valores": valores,
+        "erro": erro,
+        "hoje": hoje,
+        "periodos": TravamentoAgenda.Periodo.choices,
+        "motivos": TravamentoAgenda.Motivo.choices,
+        "travas": travas,
+        "aba": "agenda",
+    })
+
+
+@admin_required
+@require_POST
+def destravar_agenda(request, pk):
+    t = get_object_or_404(TravamentoAgenda, pk=pk)
+    dia = data_extenso(t.data)
+    regras.destravar_agenda(request.user, t)
+    messages.success(request, f"Agenda destravada: {dia}.")
+    voltar = request.POST.get("voltar", "")
+    if voltar.startswith("/") and not voltar.startswith("//"):
+        return redirect(voltar)
+    return redirect("travar_agenda")
 
 
 @login_required

@@ -311,9 +311,9 @@ class Agendamento(models.Model):
         return self.responsavel_status == self.RespStatus.PENDENTE
 
     def pode_trocar_responsavel(self, usuario):
-        """Quem fez o agendamento ou quem está acompanhando hoje pode passar pra outra pessoa
-        (regra do Pedro, 12/11/2026)."""
-        return usuario.pk in (self.criado_por_id, self.responsavel_id)
+        """Só o técnico escalado (quem atende de fato) pode passar pra outra pessoa
+        (regra do Pedro, 20/11/2026: um técnico por dia, e só ele transfere)."""
+        return usuario.pk == (self.responsavel_id or self.criado_por_id)
 
 
 class ConviteResponsavel(models.Model):
@@ -352,6 +352,55 @@ class UsuarioDiaIndisponivel(models.Model):
         return f"{self.usuario} · {self.data:%d/%m/%Y}"
 
 
+class TravamentoAgenda(models.Model):
+    """Período em que a sala fica fechada pra agendamento (manutenção, limpeza, testes).
+    Só Administrador trava/destrava (regra do Pedro, 20/11/2026)."""
+
+    class Periodo(models.TextChoices):
+        DIA = "dia", "Dia todo"
+        MANHA = "manha", "08:00 às 12:00"
+        TARDE = "tarde", "12:00 às 18:00"
+        NOITE = "noite", "18:00 às 00:00"
+
+    class Motivo(models.TextChoices):
+        MANUTENCAO = "manutencao", "Manutenção"
+        LIMPEZA = "limpeza", "Limpeza"
+        TESTES = "testes", "Testes"
+
+    HORAS = {"dia": (0, 24), "manha": (8, 12), "tarde": (12, 18), "noite": (18, 24)}
+
+    data = models.DateField(db_index=True)
+    periodo = models.CharField(max_length=10, choices=Periodo.choices, default=Periodo.DIA)
+    motivo = models.CharField(max_length=12, choices=Motivo.choices)
+    observacao = models.CharField("Observação", max_length=255, blank=True)
+    criado_por = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["data", "periodo"]
+        verbose_name = "travamento da agenda"
+        verbose_name_plural = "travamentos da agenda"
+
+    def __str__(self):
+        return f"{self.data:%d/%m/%Y} · {self.get_periodo_display()} · {self.get_motivo_display()}"
+
+    @property
+    def horas(self):
+        return self.HORAS[self.periodo]
+
+    @property
+    def inicio(self):
+        from datetime import datetime, time
+
+        return timezone.make_aware(datetime.combine(self.data, time())) + timedelta(hours=self.horas[0])
+
+    @property
+    def fim(self):
+        from datetime import datetime, time
+
+        return timezone.make_aware(datetime.combine(self.data, time())) + timedelta(hours=self.horas[1])
+
+
 class Notificacao(models.Model):
     """O que aconteceu na equipe (feed do sininho do Início). Sem destinatário = vale pra toda a equipe."""
 
@@ -367,6 +416,8 @@ class Notificacao(models.Model):
         CONVITE_CANCELADO = "convite_cancelado", "Convite cancelado"
         BLACKLIST = "blacklist", "Blacklist"
         MULTA = "multa", "Multa"
+        TRAVOU = "travou", "Travou a agenda"
+        DESTRAVOU = "destravou", "Destravou a agenda"
 
     autor = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     destinatario = models.ForeignKey(Usuario, on_delete=models.CASCADE, null=True, blank=True, related_name="notificacoes")

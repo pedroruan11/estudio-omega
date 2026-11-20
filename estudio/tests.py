@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from . import regras
-from .models import Agendamento, Cliente, Contato, Debito, HorarioFuncionamento, Usuario, Vinculo
+from .models import Agendamento, Cliente, Contato, Debito, HorarioFuncionamento, Notificacao, TravamentoAgenda, Usuario, Vinculo
 
 SEG = date(2030, 1, 7)  # segunda-feira: 18h–00h
 SAB = date(2030, 1, 12)  # sábado: 09h–23h
@@ -621,14 +621,14 @@ class TrocaResponsavelTest(Base):
         self.ag, _ = regras.responder_convite(self.dudu, self.ag, True)
 
     def test_pedido_recusado_ou_pendente_aparece_no_meu_calendario(self):
-        outro = self.agendar(usuario=self.admin, hora=21, horas=2, responsavel=self.fabio)
+        outro = self.agendar(usuario=self.admin, data=SEG + timedelta(days=1), hora=21, horas=2, responsavel=self.fabio)
         self.assertIn(outro, regras.responsabilidades_aceitas(self.admin, agora=ANTES))
         regras.responder_convite(self.fabio, outro, False)
         self.assertIn(outro, regras.responsabilidades_aceitas(self.admin, agora=ANTES))
         self.assertNotIn(outro, regras.responsabilidades_aceitas(self.fabio, agora=ANTES))
 
     def test_proprio_agendamento_aparece_no_meu_calendario(self):
-        meu = self.agendar(usuario=self.edicao, hora=21, horas=2)
+        meu = self.agendar(usuario=self.edicao, data=SEG + timedelta(days=1), hora=21, horas=2)
         self.assertIn(meu, regras.responsabilidades_aceitas(self.edicao, agora=ANTES))
 
     def test_responsavel_passa_pra_outro_e_continua_ate_aceitar(self):
@@ -656,9 +656,10 @@ class TrocaResponsavelTest(Base):
         ag, convidado, quem_convidou = expirados[0]
         self.assertEqual((ag.responsavel, convidado, quem_convidou), (self.dudu, self.fabio, self.dudu))
 
-    def test_quem_agendou_tambem_pode_trocar(self):
-        regras.trocar_responsavel(self.admin, self.ag, self.fabio, agora=ANTES)
-        self.assertEqual(Agendamento.objects.get(pk=self.ag.pk).responsavel_convidado, self.fabio)
+    def test_quem_agendou_nao_troca_depois_do_aceite(self):
+        """Regra de 20/11/2026: só o técnico escalado passa pra outro."""
+        with self.assertRaises(regras.SemPermissao):
+            regras.trocar_responsavel(self.admin, self.ag, self.fabio, agora=ANTES)
 
     def test_terceiro_nao_pode_trocar(self):
         with self.assertRaises(regras.SemPermissao):
@@ -855,3 +856,166 @@ class AjustesTelasTest(Base):
         })
         self.assertRedirects(r, reverse("meu_calendario"), fetch_redirect_response=False)
         self.assertEqual(set(self.edicao.dias_bloqueados.values_list("data", flat=True)), {a, b})
+
+
+TER = SEG + timedelta(days=1)
+
+
+class TravarAgendaTest(Base):
+    """Regra de 20/11/2026: Administrador trava o dia todo ou um período (manutenção, limpeza, testes)."""
+
+    def travar(self, data=SEG, periodo="noite", motivo="manutencao", usuario=None, **kw):
+        return regras.travar_agenda(usuario or self.admin, data, periodo, motivo, agora=ANTES, **kw)
+
+    def test_so_admin_trava(self):
+        with self.assertRaises(regras.SemPermissao):
+            self.travar(usuario=self.edicao)
+
+    def test_travado_some_dos_horarios_e_bloqueia_agendamento(self):
+        self.travar(periodo="noite", observacao="troca de cabos")
+        self.assertEqual(regras.horarios_livres(SEG, "ensaio", 2, agora=ANTES), [])
+        self.assertEqual(regras.inicios_com_fins(SEG, "ensaio", agora=ANTES), [])
+        self.assertNotIn(SEG, regras.dias_com_vaga(2030, 1, "ensaio", agora=ANTES))
+        with self.assertRaises(regras.RegraErro):
+            self.agendar(data=SEG, hora=20, horas=2)
+
+    def test_periodo_da_tarde_no_sabado(self):
+        self.travar(data=SAB, periodo="tarde", motivo="limpeza")
+        inicios = [i["hora"] for i in regras.inicios_com_fins(SAB, "ensaio", agora=ANTES)]
+        self.assertIn(9, inicios)
+        self.assertNotIn(12, inicios)
+        self.assertIn(18, inicios)
+        manha = next(i for i in regras.inicios_com_fins(SAB, "ensaio", agora=ANTES) if i["hora"] == 9)
+        self.assertEqual(manha["fins"], [11, 12])  # não atravessa o travamento das 12h
+        janelas = dict(regras.janelas_livres(15, agora=ANTES))
+        self.assertEqual(janelas[SAB], [(9, 12), (18, 23)])
+
+    def test_nao_trava_por_cima_de_agendamento(self):
+        self.agendar(data=SEG, hora=20, horas=2)
+        with self.assertRaises(regras.RegraErro) as e:
+            self.travar(periodo="dia")
+        self.assertIn("FIRE", str(e.exception))
+        self.assertFalse(TravamentoAgenda.objects.exists())
+        self.travar(periodo="manha")  # período sem agendamento pode
+
+    def test_nao_trava_duas_vezes(self):
+        self.travar(periodo="dia")
+        with self.assertRaises(regras.RegraErro):
+            self.travar(periodo="noite")
+
+    def test_destravar_libera(self):
+        t = self.travar(periodo="noite", motivo="testes")
+        regras.destravar_agenda(self.admin, t)
+        self.assertTrue(regras.horarios_livres(SEG, "ensaio", 2, agora=ANTES))
+        self.assertTrue(Notificacao.objects.filter(tipo=Notificacao.Tipo.DESTRAVOU).exists())
+
+    def test_faixas_mostram_travado(self):
+        self.travar(periodo="noite")
+        faixas = regras.faixas_do_dia(SEG)
+        self.assertEqual(len(faixas), 1)
+        self.assertTrue(faixas[0].get("travado"))
+
+    def test_telas(self):
+        self.client.force_login(self.admin)
+        r = self.client.post(reverse("travar_agenda"), {"data": "2030-01-08", "periodo": "dia", "motivo": "limpeza", "observacao": "dedetização"})
+        self.assertEqual(r.status_code, 302)
+        t = TravamentoAgenda.objects.get()
+        self.assertEqual((t.periodo, t.motivo, t.observacao), ("dia", "limpeza", "dedetização"))
+        self.assertContains(self.client.get(reverse("travar_agenda")), "Destravar")
+        self.assertContains(self.client.get(reverse("agenda") + "?d=2030-01-08"), "Agenda travada")
+        self.assertContains(self.client.get(reverse("agenda_mes") + "?m=2030-01&v=lista"), "Travado")
+        self.client.post(reverse("destravar_agenda", args=[t.pk]))
+        self.assertFalse(TravamentoAgenda.objects.exists())
+        self.client.force_login(self.edicao)
+        self.assertEqual(self.client.get(reverse("travar_agenda")).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("agenda_mes")), "Travar agenda")
+
+
+class TecnicoDoDiaTest(Base):
+    """Regra de 20/11/2026: um técnico por dia; novo agendamento no dia entra com ele, sem escolha;
+    só ele passa o dia pra outro, e o convite/aceite vale pro dia inteiro."""
+
+    def setUp(self):
+        super().setUp()
+        self.dudu = Usuario.objects.create_user("dudu", password="x", perfil=Usuario.Perfil.EDICAO)
+        self.fabio = Usuario.objects.create_user("fabio", password="x", perfil=Usuario.Perfil.ADMIN)
+        self.banda2 = criar_cliente("Outra Banda")
+
+    def test_quem_escolhe_a_si_atende_todos_do_dia(self):
+        self.agendar(usuario=self.dudu, hora=18, horas=2)
+        ag2 = self.agendar(usuario=self.admin, cliente=self.banda2, hora=21, horas=2, responsavel=self.fabio)
+        self.assertEqual(ag2.responsavel, self.dudu)
+        self.assertFalse(ag2.responsavel_pendente)
+        self.assertTrue(Notificacao.objects.filter(destinatario=self.dudu, agendamento=ag2).exists())
+
+    def test_depois_do_aceite_novo_agendamento_fica_com_quem_aceitou(self):
+        ag1 = self.agendar(usuario=self.admin, hora=18, horas=2, responsavel=self.dudu)
+        regras.responder_convite(self.dudu, ag1, True)
+        ag2 = self.agendar(usuario=self.admin, cliente=self.banda2, hora=21, horas=2)
+        self.assertEqual(ag2.responsavel, self.dudu)
+
+    def test_convite_em_aberto_vale_pro_dia_e_aceite_pega_todos(self):
+        ag1 = self.agendar(usuario=self.admin, hora=18, horas=2, responsavel=self.dudu)
+        ag2 = self.agendar(usuario=self.fabio, cliente=self.banda2, hora=21, horas=2)
+        self.assertEqual((ag2.responsavel, ag2.responsavel_convidado), (self.admin, self.dudu))
+        regras.responder_convite(self.dudu, ag1, True)
+        ag2.refresh_from_db()
+        self.assertEqual(ag2.responsavel, self.dudu)
+        self.assertFalse(ag2.responsavel_pendente)
+
+    def test_outro_dia_e_livre(self):
+        self.agendar(usuario=self.dudu, hora=18, horas=2)
+        ag = self.agendar(usuario=self.admin, data=TER, hora=18, horas=2)
+        self.assertEqual(ag.responsavel, self.admin)
+
+    def test_transferencia_leva_o_dia_inteiro(self):
+        ag1 = self.agendar(usuario=self.dudu, hora=18, horas=2)
+        ag2 = self.agendar(usuario=self.admin, cliente=self.banda2, hora=21, horas=2)
+        with self.assertRaises(regras.SemPermissao):  # quem agendou o 2º não transfere
+            regras.trocar_responsavel(self.admin, ag2, self.fabio, agora=ANTES)
+        regras.trocar_responsavel(self.dudu, ag1, self.fabio, agora=ANTES)
+        ag2.refresh_from_db()
+        self.assertEqual(ag2.responsavel_convidado, self.fabio)
+        self.assertEqual(ag2.responsavel, self.dudu)  # até aceitar, continua o Dudu
+        regras.responder_convite(self.fabio, ag1, True)
+        ag1.refresh_from_db()
+        ag2.refresh_from_db()
+        self.assertEqual((ag1.responsavel, ag2.responsavel), (self.fabio, self.fabio))
+
+    def test_recusa_e_cancelamento_valem_pro_dia(self):
+        ag1 = self.agendar(usuario=self.dudu, hora=18, horas=2)
+        ag2 = self.agendar(usuario=self.admin, cliente=self.banda2, hora=21, horas=2)
+        regras.trocar_responsavel(self.dudu, ag1, self.fabio, agora=ANTES)
+        ag2.refresh_from_db()
+        regras.responder_convite(self.fabio, ag2, False)
+        ag1.refresh_from_db()
+        self.assertFalse(ag1.responsavel_pendente)
+        ag1.refresh_from_db()
+        regras.trocar_responsavel(self.dudu, ag1, self.fabio, agora=ANTES)
+        regras.cancelar_convite(self.dudu, ag1)
+        ag2.refresh_from_db()
+        self.assertFalse(ag2.responsavel_pendente)
+
+    def test_expiracao_vale_pro_dia(self):
+        ag1 = self.agendar(usuario=self.dudu, hora=18, horas=2)
+        ag2 = self.agendar(usuario=self.admin, cliente=self.banda2, hora=21, horas=2)
+        regras.trocar_responsavel(self.dudu, ag1, self.fabio, agora=ANTES)
+        regras.expirar_convites_pendentes(agora=ag1.inicio - timedelta(hours=23))  # só o das 18h venceu
+        ag2.refresh_from_db()
+        self.assertFalse(ag2.responsavel_pendente)
+        self.assertEqual(ag2.responsavel, self.dudu)
+
+    def test_remarcar_pra_dia_com_tecnico(self):
+        self.agendar(usuario=self.dudu, data=TER, hora=18, horas=2)
+        ag = self.agendar(usuario=self.admin, cliente=self.banda2, hora=18, horas=2)
+        regras.remarcar(self.admin, ag, TER, 21, agora=ANTES)
+        ag.refresh_from_db()
+        self.assertEqual(ag.responsavel, self.dudu)
+
+    def test_tela_novo_agendamento_traz_tecnico_fixo(self):
+        self.agendar(usuario=self.dudu, hora=18, horas=2)
+        self.client.force_login(self.admin)
+        j = self.client.get(reverse("responsaveis_json") + "?data=2030-01-07").json()
+        self.assertEqual(j["fixo"]["id"], self.dudu.pk)
+        j = self.client.get(reverse("responsaveis_json") + "?data=2030-01-08").json()
+        self.assertIsNone(j["fixo"])

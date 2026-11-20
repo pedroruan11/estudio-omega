@@ -3,7 +3,7 @@
 {% block topo %}
 <header class="topo" style="flex-direction:column;align-items:stretch;gap:14px">
 <div class="linha"><h1>Agenda</h1>
-<div style="display:flex;align-items:center;gap:8px">{% include "estudio/_varinha.html" %}
+<div style="display:flex;align-items:center;gap:8px">{% if user.is_admin %}<a class="btn icone btn-travar" href="{% url 'travar_agenda' %}?data={{ dia|date:'Y-m-d' }}" aria-label="Travar agenda" title="Travar agenda">{% include "estudio/_cadeado.html" with t=20 %}</a>{% endif %}{% include "estudio/_varinha.html" %}
 <div class="segmento" role="group" aria-label="Visualização"><a class="on" href="{% url 'agenda' %}?d={{ dia|date:'Y-m-d' }}">Semana</a><a href="{% url 'agenda_mes' %}?m={{ dia|date:'Y-m' }}">Mês</a></div></div></div>
 <div class="linha">
 <a class="btn icone" style="border:0" href="?d={{ anterior }}" aria-label="Semana anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
@@ -20,7 +20,9 @@
 <div class="linha"><span class="kicker">{{ dia_nome }} {{ dia|date:"d/m" }}{% if janela_txt %} · {{ janela_txt }}{% endif %}</span>{% if total %}<span class="rotulo">{{ usadas }}h de {{ total }}h ocupadas</span>{% endif %}</div>
 {% if total %}<div class="barra-ocup" aria-hidden="true"><i style="width:{{ pct }}%"></i></div>{% endif %}
 {% for f in faixas %}
-{% if f.livre %}
+{% if f.travado %}
+<div class="slot travado"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt" style="flex:1"><b>{% include "estudio/_cadeado.html" with t=14 %} Agenda travada</b><span style="font-size:13px">{{ f.trav.get_motivo_display }}{% if f.trav.observacao %} · {{ f.trav.observacao }}{% endif %}</span></span>{% if user.is_admin %}<form method="post" action="{% url 'destravar_agenda' f.trav.pk %}" style="position:relative;z-index:1">{% csrf_token %}<input type="hidden" name="voltar" value="{{ request.get_full_path }}"><button class="btn pequeno" type="submit">Destravar</button></form>{% endif %}</div>
+{% elif f.livre %}
 <a class="slot livre-slot" href="{% url 'agendamento_novo' %}?data={{ f.ini|date:'Y-m-d' }}&hora={{ f.ini|time:'G' }}"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt"><b>Livre</b><span style="font-size:13px">{% if f.horas < 2 %}Só gravação (ensaio exige 2h){% else %}Toque para agendar{% endif %}</span></span></a>
 {% else %}
 <div class="slot{% if f.ag.tipo == 'gravacao' %} grav{% endif %}"><span class="t">{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }}</span><span class="item-txt"><a class="slot-link" href="{% url 'agendamento' f.ag.pk %}"><b>{{ f.ag.cliente }}</b></a><span class="sub" style="font-size:13px">{{ f.ag.get_tipo_display }} · {{ f.ag.horas }}h</span>{% if f.bl %}<span style="font-size:12.5px;font-weight:700;color:var(--perigo)">Blacklist{% if f.multa %} · cobrar multa {{ f.multa }}{% endif %}</span>{% endif %}{% include "estudio/_atende.html" with a=f.atende convidado=f.resp_convidado %}</span></div>

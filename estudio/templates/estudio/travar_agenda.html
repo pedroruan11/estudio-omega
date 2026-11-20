@@ -1,0 +1,34 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Travar agenda{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'agenda_mes' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Travar agenda</h1></header>
+{% endblock %}
+{% block conteudo %}
+<form method="post" style="display:flex;flex-direction:column;flex:1">{% csrf_token %}
+<main class="conteudo" style="gap:18px">
+<p class="sub" style="margin:0">Trava a sala pra manutenção, limpeza ou testes. O período travado some dos horários livres e ninguém consegue agendar nele.</p>
+{% if erro %}<div class="erro" role="alert">{{ erro }}</div>{% endif %}
+<label class="campo">Dia<input type="date" name="data" value="{{ valores.data }}" min="{{ hoje|date:'Y-m-d' }}" required></label>
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Período</legend>
+<div class="grade2" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+{% for v, rot in periodos %}<label class="chip"><input type="radio" name="periodo" value="{{ v }}" required{% if valores.periodo == v %} checked{% endif %}><span>{{ rot }}</span></label>{% endfor %}
+</div></fieldset>
+<fieldset class="campo" style="border:0;padding:0;margin:0"><legend class="kicker" style="margin-bottom:8px">Motivo</legend>
+<div class="grade3">
+{% for v, rot in motivos %}<label class="chip"><input type="radio" name="motivo" value="{{ v }}" required{% if valores.motivo == v %} checked{% endif %}><span>{{ rot }}</span></label>{% endfor %}
+</div></fieldset>
+<label class="campo">Observação (opcional)<textarea name="observacao" maxlength="255" rows="2" placeholder="Ex.: troca do cabeamento da bateria">{{ valores.observacao }}</textarea></label>
+
+<span class="kicker" style="margin-top:6px">Travamentos de hoje em diante</span>
+{% for i in travas %}
+<div class="card travado" style="display:flex;align-items:center;gap:12px">
+<span style="color:var(--ouro)">{% include "estudio/_cadeado.html" %}</span>
+<span class="item-txt" style="flex:1;display:flex;flex-direction:column;gap:2px"><b style="color:var(--txt)">{{ i.dia }} · {{ i.t.get_periodo_display }}</b><span class="sub" style="font-size:13px">{{ i.t.get_motivo_display }}{% if i.t.observacao %} · {{ i.t.observacao }}{% endif %}</span></span>
+<button class="btn pequeno" type="submit" form="destravar-{{ i.t.pk }}">Destravar</button>
+</div>
+{% empty %}<div class="vazio">Nenhum travamento marcado.</div>{% endfor %}
+</main>
+<div class="rodape-fixo"><button class="btn ouro" type="submit" style="min-height:54px">TRAVAR AGENDA</button></div>
+</form>
+{% for i in travas %}<form method="post" action="{% url 'destravar_agenda' i.t.pk %}" id="destravar-{{ i.t.pk }}" hidden>{% csrf_token %}</form>{% endfor %}
+{% endblock %}

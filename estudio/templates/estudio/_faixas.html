@@ -1,5 +1,8 @@
 {% for f in faixas %}
-{% if f.livre %}
+{% if f.travado %}
+<div class="tempo"><div class="hora">{{ f.ini|time:"H:i" }}</div>
+<div class="card travado" style="display:flex;flex-direction:column;gap:4px"><span class="titulo-card" style="color:var(--txt2)">{% include "estudio/_cadeado.html" with t=15 %} Agenda travada · {{ f.ini|time:"H:i" }} às {{ f.fim_l|time:"H:i" }}</span><span class="sub">{{ f.trav.get_motivo_display }}{% if f.trav.observacao %} · {{ f.trav.observacao }}{% endif %}</span></div></div>
+{% elif f.livre %}
 <div class="tempo"><div class="hora">{{ f.ini|time:"H:i" }}</div>
 <a class="livre" href="{% url 'agendamento_novo' %}?data={{ f.ini|date:'Y-m-d' }}&hora={{ f.ini|time:'G' }}"><span>{{ f.ini|time:"H:i" }} – {{ f.fim_l|time:"H:i" }} livre</span><span>+ Agendar</span></a></div>
 {% else %}

@@ -258,6 +258,23 @@ async function carregarTecnicos(){
   const box=$('tecnicos');box.innerHTML='<span class="sub">Carregando…</span>';
   const j=await (await fetch(`{% url 'responsaveis_json' %}?data=${campo.data.value}`)).json();
   box.innerHTML='';
+  if(j.fixo){
+    // Um técnico por dia: já tem alguém escalado nesse dia, sem escolha.
+    const souEu=String(j.fixo.id)===EU_ID;
+    const nome=souEu?`${EU_NOME} (você)`:j.fixo.nome.split(' ')[0];
+    const b=document.createElement('button');b.type='button';b.className='wz-cli sel';
+    b.innerHTML=`<span class="av cheio">${(j.fixo.nome||'?').slice(0,2).toUpperCase()}</span><span class="item-txt"><b></b><span class="sub" style="font-size:13px"></span></span>`;
+    b.querySelector('b').textContent=nome;
+    b.querySelector('.sub').textContent=j.fixo.convidado
+      ?`Já atende nesse dia · convite pra ${j.fixo.convidado.split(' ')[0]} aguardando`
+      :'Já atende nesse dia';
+    b.addEventListener('click',()=>{campo.resp.value=j.fixo.id;est.tecNome=souEu?EU_NOME:j.fixo.nome.split(' ')[0];irPara('obs')});
+    const p=document.createElement('p');p.className='sub';p.style.cssText='margin:4px 2px 0;font-size:13px';
+    p.textContent='Nesse dia já tem técnico escalado: todos os agendamentos do dia ficam com ele. Só ele pode passar o dia pra outra pessoa.';
+    box.append(b,p);
+    campo.resp.value=j.fixo.id;
+    return;
+  }
   const eu=j.usuarios.find(u=>String(u.id)===EU_ID);
   const lista=eu?[eu,...j.usuarios.filter(u=>u!==eu)]:j.usuarios;
   lista.forEach(u=>{

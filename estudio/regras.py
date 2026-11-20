@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from .models import (
     Agendamento, Configuracao, ConviteResponsavel, Debito, HorarioFuncionamento, Notificacao,
-    UsuarioDiaIndisponivel, Usuario,
+    TravamentoAgenda, UsuarioDiaIndisponivel, Usuario,
 )
 
 
@@ -150,11 +150,7 @@ def horarios_livres(data, tipo, horas, ignorar_id=None, agora=None):
     abre, fecha = janela
     agora = agora or timezone.now()
     dia_ini = inicio_em(data, 0)
-    ocupados = list(
-        Agendamento.objects.no_intervalo(dia_ini, dia_ini + timedelta(days=1, hours=6))
-        .exclude(pk=ignorar_id or 0)
-        .values_list("inicio", "fim")
-    )
+    ocupados = _ocupados(dia_ini, dia_ini + timedelta(days=1, hours=6), ignorar_id=ignorar_id)
     livres = []
     for h in range(abre, fecha - horas + 1):
         ini = inicio_em(data, h)
@@ -167,8 +163,20 @@ def horarios_livres(data, tipo, horas, ignorar_id=None, agora=None):
     return livres
 
 
-def _ocupados(inicio, fim):
-    return list(Agendamento.objects.no_intervalo(inicio, fim).values_list("inicio", "fim"))
+def travamentos_no_intervalo(inicio, fim):
+    """Travamentos da agenda que se sobrepõem ao intervalo [inicio, fim)."""
+    qs = TravamentoAgenda.objects.filter(
+        data__gte=timezone.localdate(inicio) - timedelta(days=1), data__lte=timezone.localdate(fim)
+    ).select_related("criado_por")
+    return [t for t in qs if t.inicio < fim and t.fim > inicio]
+
+
+def _ocupados(inicio, fim, ignorar_id=None):
+    """Intervalos em que a sala não está livre: agendamentos ativos e travamentos da agenda."""
+    qs = Agendamento.objects.no_intervalo(inicio, fim)
+    if ignorar_id:
+        qs = qs.exclude(pk=ignorar_id)
+    return list(qs.values_list("inicio", "fim")) + [(t.inicio, t.fim) for t in travamentos_no_intervalo(inicio, fim)]
 
 
 def inicios_com_fins(data, tipo, agora=None, ocupados=None, cfg=None):
@@ -232,15 +240,114 @@ def faixas_do_dia(data):
     ags = list(
         Agendamento.objects.no_intervalo(ini_dia, fim_dia).select_related("cliente", "contato", "responsavel", "responsavel_convidado", "criado_por").order_by("inicio")
     )
+    blocos = [{"livre": False, "inicio": ag.inicio, "fim": ag.fim, "ag": ag, "horas": ag.horas} for ag in ags]
+    for t in travamentos_no_intervalo(ini_dia, fim_dia):
+        ini_t, fim_t = max(t.inicio, ini_dia), min(t.fim, fim_dia)
+        blocos.append({"livre": False, "travado": True, "trav": t, "inicio": ini_t, "fim": fim_t,
+                       "horas": int((fim_t - ini_t).total_seconds() // 3600)})
+    blocos.sort(key=lambda b: b["inicio"])
     faixas, cursor = [], ini_dia
-    for ag in ags:
-        if ag.inicio > cursor:
-            faixas.append({"livre": True, "inicio": cursor, "fim": ag.inicio, "horas": int((ag.inicio - cursor).total_seconds() // 3600)})
-        faixas.append({"livre": False, "inicio": ag.inicio, "fim": ag.fim, "ag": ag, "horas": ag.horas})
-        cursor = max(cursor, ag.fim)
+    for b in blocos:
+        if b["inicio"] > cursor:
+            faixas.append({"livre": True, "inicio": cursor, "fim": b["inicio"], "horas": int((b["inicio"] - cursor).total_seconds() // 3600)})
+        faixas.append(b)
+        cursor = max(cursor, b["fim"])
     if cursor < fim_dia:
         faixas.append({"livre": True, "inicio": cursor, "fim": fim_dia, "horas": int((fim_dia - cursor).total_seconds() // 3600)})
     return faixas
+
+
+# ---------- travar agenda (manutenção, limpeza, testes) ----------
+
+def travamentos_futuros(agora=None):
+    hoje = timezone.localdate(agora or timezone.now())
+    return TravamentoAgenda.objects.filter(data__gte=hoje).select_related("criado_por").order_by("data", "periodo")
+
+
+def travar_agenda(usuario, data, periodo, motivo, observacao="", agora=None):
+    """Trava um período de um dia. Só Administrador. Não deixa travar por cima de agendamento
+    ativo nem de outro travamento (regra do Pedro, 20/11/2026)."""
+    if not usuario.is_admin:
+        raise SemPermissao("Só um administrador pode travar a agenda.")
+    if periodo not in TravamentoAgenda.HORAS:
+        raise RegraErro("Escolha o período.")
+    if motivo not in TravamentoAgenda.Motivo.values:
+        raise RegraErro("Escolha o motivo.")
+    agora = agora or timezone.now()
+    if data is None:
+        raise RegraErro("Escolha o dia.")
+    if data < timezone.localdate(agora):
+        raise RegraErro("Não dá pra travar um dia que já passou.")
+    novo = TravamentoAgenda(data=data, periodo=periodo, motivo=motivo, observacao=(observacao or "")[:255], criado_por=usuario)
+    with transaction.atomic():
+        _travar()
+        ja = [t for t in travamentos_no_intervalo(novo.inicio, novo.fim)]
+        if ja:
+            raise RegraErro(f"Esse período já está travado ({ja[0].get_periodo_display().lower()} · {ja[0].get_motivo_display()}).")
+        ags = list(Agendamento.objects.no_intervalo(novo.inicio, novo.fim).select_related("cliente").order_by("inicio"))
+        if ags:
+            lista = ", ".join(
+                f"{a.cliente} ({timezone.localtime(a.inicio):%H}h–{timezone.localtime(a.fim):%H}h)" for a in ags
+            )
+            raise RegraErro(f"Não dá pra travar: já tem agendamento nesse período — {lista}. Remarque ou cancele antes.")
+        novo.save()
+        notificar(usuario, Notificacao.Tipo.TRAVOU,
+                  f"travou a agenda {_DIAS[data.weekday()]} {data:%d/%m} · {novo.get_periodo_display().lower()} · {novo.get_motivo_display()}")
+    return novo
+
+
+def destravar_agenda(usuario, trav):
+    if not usuario.is_admin:
+        raise SemPermissao("Só um administrador pode destravar a agenda.")
+    texto = f"destravou a agenda {_DIAS[trav.data.weekday()]} {trav.data:%d/%m} · {trav.get_periodo_display().lower()}"
+    trav.delete()
+    notificar(usuario, Notificacao.Tipo.DESTRAVOU, texto)
+
+
+# ---------- um técnico por dia ----------
+#
+# Regra do Pedro (20/11/2026): no mesmo dia não podem trabalhar dois técnicos. Quem atende o
+# primeiro agendamento do dia atende todos; um novo agendamento nesse dia já entra com ele, sem
+# escolha. Só o técnico escalado pode passar o dia pra outro (e o outro precisa aceitar). Convites,
+# aceites, recusas e expirações valem pro dia inteiro.
+
+def agendamentos_do_dia(data, ignorar_id=None):
+    qs = Agendamento.objects.ativos().filter(inicio__gte=inicio_em(data, 0), inicio__lt=inicio_em(data + timedelta(days=1), 0))
+    if ignorar_id:
+        qs = qs.exclude(pk=ignorar_id)
+    return qs
+
+
+def escala_do_dia(data, ignorar_id=None):
+    """Quem já está escalado no dia: {"responsavel", "convidado", "convidado_por"} ou None."""
+    ref = (
+        agendamentos_do_dia(data, ignorar_id)
+        .select_related("responsavel", "responsavel_convidado", "criado_por")
+        .order_by("criado_em", "pk").first()
+    )
+    if ref is None or (ref.responsavel or ref.criado_por) is None:
+        return None
+    convidado = ref.responsavel_convidado if ref.responsavel_pendente else None
+    convidado_por = None
+    if convidado:
+        c = ref.convites_responsavel.filter(status=Agendamento.RespStatus.PENDENTE).select_related("convidado_por").first()
+        convidado_por = c.convidado_por if c else None
+    return {"responsavel": ref.responsavel or ref.criado_por, "convidado": convidado, "convidado_por": convidado_por}
+
+
+def _escalar_no_dia(ag, escala, agora):
+    """Coloca o agendamento com o técnico (e o convite em aberto, se houver) do dia."""
+    if ag.responsavel_pendente:
+        _fechar_convite(ag, Agendamento.RespStatus.EXPIRADO, agora)
+    ag.responsavel = escala["responsavel"]
+    ag.responsavel_definido_em = agora
+    ag.responsavel_convidado = escala["convidado"]
+    ag.responsavel_status = Agendamento.RespStatus.PENDENTE if escala["convidado"] else Agendamento.RespStatus.ACEITO
+    ag.save(update_fields=["responsavel", "responsavel_definido_em", "responsavel_convidado", "responsavel_status"])
+    if escala["convidado"]:
+        ConviteResponsavel.objects.create(
+            agendamento=ag, convidado=escala["convidado"], convidado_por=escala["convidado_por"] or escala["responsavel"]
+        )
 
 
 # ---------- operações ----------
@@ -263,6 +370,10 @@ def _checar_horario(data, hora, horas, tipo, ignorar_id=None, agora=None):
         ini = timezone.localtime(choque.inicio)
         fim_c = timezone.localtime(choque.fim)
         raise RegraErro(f"Horário ocupado por {choque.cliente} ({ini:%H:%M}–{fim_c:%H:%M}).")
+    trav = travamentos_no_intervalo(inicio, fim)
+    if trav:
+        t = trav[0]
+        raise RegraErro(f"A agenda está travada nesse horário ({t.get_periodo_display().lower()} · {t.get_motivo_display()}).")
     return inicio
 
 
@@ -292,8 +403,12 @@ def criar_agendamento(
     if cliente.na_blacklist and not (usuario.is_admin and confirmar_blacklist):
         raise ClienteNaBlacklist(cliente)
     agora = agora or timezone.now()
+    escala = escala_do_dia(data)
+    if escala:
+        # Já tem técnico no dia: o novo agendamento fica com ele, sem escolha.
+        responsavel = escala["responsavel"]
     responsavel = responsavel or usuario
-    if responsavel.pk != usuario.pk:
+    if escala is None and responsavel.pk != usuario.pk:
         if not pode_transferir_responsavel(data, agora):
             raise RegraErro("Só é possível escolher outra pessoa pra acompanhar em ensaios a partir de amanhã.")
         if responsavel.pk in usuarios_bloqueados_em(data):
@@ -301,6 +416,23 @@ def criar_agendamento(
     with transaction.atomic():
         cfg = _travar()
         inicio = _checar_horario(data, hora, horas, tipo, agora=agora)
+        if escala:
+            ag = Agendamento.objects.create(
+                cliente=cliente, contato=contato or cliente.contato_principal, tipo=tipo, inicio=inicio, horas=horas,
+                valor_hora=preco_hora(tipo, cfg), criado_por=usuario, observacao=observacao, pratos=bool(pratos),
+                responsavel=escala["responsavel"],
+            )
+            _escalar_no_dia(ag, escala, agora)
+            notificar(usuario, Notificacao.Tipo.AGENDOU, f"agendou {_tipo_txt(ag)} de {cliente} · {_quando(ag)}", ag)
+            if escala["responsavel"].pk != usuario.pk:
+                notificar(usuario, Notificacao.Tipo.DIRECIONOU,
+                          f"agendou {_tipo_txt(ag)} de {cliente} · {_quando(ag)} no seu dia: você já atende nesse dia.",
+                          ag, destinatario=escala["responsavel"])
+            if escala["convidado"]:
+                notificar(usuario, Notificacao.Tipo.DIRECIONOU,
+                          f"agendou {_tipo_txt(ag)} de {cliente} · {_quando(ag)} no dia que foi direcionado pra você. "
+                          f"Aceite ou recuse em Meu Calendário.", ag, destinatario=escala["convidado"])
+            return ag
         pendente = responsavel.pk != usuario.pk
         # Enquanto o convidado não aceita, quem agendou continua sendo o responsável de fato.
         ag = Agendamento.objects.create(
@@ -381,10 +513,15 @@ def remarcar(usuario, ag, data, hora, horas=None, agora=None):
         novo_inicio = _checar_horario(data, hora, horas, ag.tipo, ignorar_id=ag.pk, agora=agora)
         debito = _gerar_debito(usuario, ag, Debito.Motivo.REMARCACAO, cfg) if tardio else None
         antes = _quando(ag)
+        mudou_dia = timezone.localdate(ag.inicio) != data
         ag.inicio = novo_inicio
         ag.horas = horas
         ag.remarcacoes += 1
         ag.save()
+        if mudou_dia:
+            escala = escala_do_dia(data, ignorar_id=ag.pk)
+            if escala:
+                _escalar_no_dia(ag, escala, agora)
         notificar(usuario, Notificacao.Tipo.REMARCOU, f"remarcou {_tipo_txt(ag)} de {ag.cliente}: {antes} → {_quando(ag)}", ag)
     return debito
 
@@ -568,13 +705,26 @@ def responder_convite(usuario, ag, aceitar, agora=None):
     if ag.responsavel_convidado_id != usuario.pk or ag.responsavel_status != Agendamento.RespStatus.PENDENTE:
         raise RegraErro("Esse convite não está mais disponível pra você responder.")
     with transaction.atomic():
-        convite = _fechar_convite(ag, Agendamento.RespStatus.ACEITO if aceitar else Agendamento.RespStatus.RECUSADO, agora)
-        if aceitar:
-            ag.responsavel = usuario
-            ag.responsavel_definido_em = agora
-        ag.responsavel_convidado = None
-        ag.responsavel_status = Agendamento.RespStatus.ACEITO
-        ag.save(update_fields=["responsavel", "responsavel_convidado", "responsavel_status", "responsavel_definido_em"])
+        status = Agendamento.RespStatus.ACEITO if aceitar else Agendamento.RespStatus.RECUSADO
+        convite = None
+        # vale pro dia inteiro (um técnico por dia)
+        irmaos = list(
+            agendamentos_do_dia(timezone.localdate(ag.inicio))
+            .filter(responsavel_convidado=usuario, responsavel_status=Agendamento.RespStatus.PENDENTE)
+        )
+        if ag.pk not in [a.pk for a in irmaos]:
+            irmaos.append(ag)
+        for a in irmaos:
+            c = _fechar_convite(a, status, agora)
+            if a.pk == ag.pk:
+                convite = c
+                a = ag
+            if aceitar:
+                a.responsavel = usuario
+                a.responsavel_definido_em = agora
+            a.responsavel_convidado = None
+            a.responsavel_status = Agendamento.RespStatus.ACEITO
+            a.save(update_fields=["responsavel", "responsavel_convidado", "responsavel_status", "responsavel_definido_em"])
         avisar = (convite.convidado_por if convite else None) or ag.criado_por
         if aceitar:
             notificar(usuario, Notificacao.Tipo.ACEITOU,
@@ -587,13 +737,13 @@ def responder_convite(usuario, ag, aceitar, agora=None):
 
 
 def trocar_responsavel(usuario, ag, novo, agora=None):
-    """Passa o acompanhamento pra outra pessoa. Só quem agendou ou o responsável atual podem.
+    """Passa o acompanhamento do dia inteiro pra outra pessoa. Só o técnico escalado pode.
     O novo precisa aceitar no app; até lá (e se recusar ou não responder) continua o atual."""
     agora = agora or timezone.now()
     if ag.status != Agendamento.Status.AGENDADO:
         raise RegraErro("Esse agendamento não está ativo.")
     if not ag.pode_trocar_responsavel(usuario):
-        raise SemPermissao("Só quem fez o agendamento ou quem está acompanhando pode trocar o responsável.")
+        raise SemPermissao("Só o técnico escalado nesse dia pode passar pra outro.")
     if novo is None or not novo.is_active:
         raise RegraErro("Escolha quem vai acompanhar.")
     if novo.pk == ag.responsavel_id:
@@ -604,14 +754,20 @@ def trocar_responsavel(usuario, ag, novo, agora=None):
     if novo.pk in usuarios_bloqueados_em(data):
         raise RegraErro(f"{novo} marcou que não pode acompanhar nesse dia.")
     with transaction.atomic():
-        if ag.responsavel_pendente:  # já havia um convite em aberto: é substituído
-            _fechar_convite(ag, Agendamento.RespStatus.EXPIRADO, agora)
-        ag.responsavel_convidado = novo
-        ag.responsavel_status = Agendamento.RespStatus.PENDENTE
-        ag.save(update_fields=["responsavel_convidado", "responsavel_status"])
-        ConviteResponsavel.objects.create(agendamento=ag, convidado=novo, convidado_por=usuario)
+        dia = list(agendamentos_do_dia(data, ignorar_id=ag.pk)) + [ag]
+        for a in dia:
+            if a.responsavel_pendente:  # já havia um convite em aberto: é substituído
+                _fechar_convite(a, Agendamento.RespStatus.EXPIRADO, agora)
+            if a.responsavel_id is None:
+                a.responsavel = a.criado_por
+            a.responsavel_convidado = novo
+            a.responsavel_status = Agendamento.RespStatus.PENDENTE
+            a.save(update_fields=["responsavel", "responsavel_convidado", "responsavel_status"])
+            ConviteResponsavel.objects.create(agendamento=a, convidado=novo, convidado_por=usuario)
+        outros = len(dia) - 1
+        extra = f" (e mais {outros} agendamento{'s' if outros > 1 else ''} do mesmo dia)" if outros else ""
         notificar(usuario, Notificacao.Tipo.DIRECIONOU,
-                  f"direcionou pra você o {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}. Aceite ou recuse em Meu Calendário.",
+                  f"direcionou pra você o {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}{extra}. Aceite ou recuse em Meu Calendário.",
                   ag, destinatario=novo)
     return ag
 
@@ -622,16 +778,18 @@ def cancelar_convite(usuario, ag, agora=None):
     if not ag.responsavel_pendente:
         raise RegraErro("Não há convite em aberto nesse agendamento.")
     if not ag.pode_trocar_responsavel(usuario):
-        raise SemPermissao("Só quem fez o agendamento ou quem está acompanhando pode mexer no responsável.")
+        raise SemPermissao("Só o técnico escalado nesse dia pode mexer no responsável.")
     with transaction.atomic():
-        _fechar_convite(ag, Agendamento.RespStatus.EXPIRADO, agora)
         if ag.responsavel_convidado:
             notificar(usuario, Notificacao.Tipo.CONVITE_CANCELADO,
                       f"cancelou o convite pra você acompanhar o {_tipo_txt(ag)} de {ag.cliente} · {_quando(ag)}",
                       ag, destinatario=ag.responsavel_convidado)
-        ag.responsavel_convidado = None
-        ag.responsavel_status = Agendamento.RespStatus.ACEITO
-        ag.save(update_fields=["responsavel_convidado", "responsavel_status"])
+        dia = [a for a in agendamentos_do_dia(timezone.localdate(ag.inicio), ignorar_id=ag.pk) if a.responsavel_pendente] + [ag]
+        for a in dia:
+            _fechar_convite(a, Agendamento.RespStatus.EXPIRADO, agora)
+            a.responsavel_convidado = None
+            a.responsavel_status = Agendamento.RespStatus.ACEITO
+            a.save(update_fields=["responsavel_convidado", "responsavel_status"])
     return ag
 
 
@@ -640,11 +798,19 @@ def expirar_convites_pendentes(agora=None):
     Retorna [(agendamento, usuario_que_nao_respondeu, quem_convidou), ...]."""
     agora = agora or timezone.now()
     expirados = []
-    pendentes = (
+    vencidos = (
         Agendamento.objects.ativos()
         .filter(responsavel_status=Agendamento.RespStatus.PENDENTE, inicio__lte=agora + timedelta(days=1))
-        .select_related("criado_por", "responsavel", "responsavel_convidado", "cliente")
+        .values_list("inicio", flat=True)
     )
+    # um técnico por dia: quando um convite do dia vence, os outros do mesmo dia vencem junto
+    dias = {timezone.localdate(i) for i in vencidos}
+    pendentes = []
+    for d in sorted(dias):
+        pendentes += list(
+            agendamentos_do_dia(d).filter(responsavel_status=Agendamento.RespStatus.PENDENTE)
+            .select_related("criado_por", "responsavel", "responsavel_convidado", "cliente")
+        )
     with transaction.atomic():
         for ag in pendentes:
             convidado = ag.responsavel_convidado
@@ -717,7 +883,7 @@ def janelas_livres(dias=20, agora=None, minimo_horas=None):
     horarios = {h.dia_semana: h for h in HorarioFuncionamento.objects.all()}
     ini_total = inicio_em(hoje, 0)
     fim_total = inicio_em(hoje + timedelta(days=dias), 0) + timedelta(hours=6)
-    ocupados = list(Agendamento.objects.no_intervalo(ini_total, fim_total).values_list("inicio", "fim"))
+    ocupados = _ocupados(ini_total, fim_total)
     resultado = []
     for i in range(dias):
         d = hoje + timedelta(days=i)
