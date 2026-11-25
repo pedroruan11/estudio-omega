@@ -602,7 +602,7 @@ def link_whatsapp_convite_responsavel(ag, quem_convidou=None):
 
 def link_whatsapp_cobrar_convite(ag, convidado, quem_cobra, url_app=""):
     """Lembrete pra quem ainda não respondeu o convite de acompanhar (tela Direcionamentos)."""
-    if not convidado or not convidado.telefone:
+    if not convidado:
         return ""
     texto = (
         f"Oi, {primeiro_nome(convidado)}! Lembrete: ainda tá aguardando sua resposta pra acompanhar o "
@@ -612,6 +612,9 @@ def link_whatsapp_cobrar_convite(ag, convidado, quem_cobra, url_app=""):
     )
     if url_app:
         texto += f"\n{url_app}"
+    if not convidado.telefone:
+        # Sem WhatsApp cadastrado: abre o WhatsApp pra escolher o contato na mão.
+        return f"https://wa.me/?text={quote(texto)}"
     return link_whatsapp_numero(convidado.telefone, texto)
 
 

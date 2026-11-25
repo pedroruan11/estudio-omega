@@ -1078,6 +1078,12 @@ class CobrarConviteTest(Base):
         self.assertIn("aguardando%20sua%20resposta", html)
         self.assertIn(str(pendente.cliente), html)
 
+    def test_lembrar_sem_telefone_abre_whatsapp_pra_escolher(self):
+        dudu = Usuario.objects.create_user("dudu", password="x", perfil=Usuario.Perfil.EDICAO)
+        self.agendar(usuario=self.admin, responsavel=dudu)
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse("meus_direcionamentos")), "https://wa.me/?text=Oi%2C%20dudu")
+
 
 class ClienteMensagemTest(Base):
     def test_botao_mensagem_com_icone_e_saudacao(self):
@@ -1085,3 +1091,4 @@ class ClienteMensagemTest(Base):
         r = self.client.get(reverse("cliente", args=[self.fire.pk]))
         self.assertContains(r, "https://wa.me/5511999990000?text=Ol%C3%A1%2C%20Leandro%21%20Aqui%20%C3%A9%20do%20Omega%20Studio.%20")
         self.assertContains(r, "#25D366")
+
