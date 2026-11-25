@@ -600,6 +600,21 @@ def link_whatsapp_convite_responsavel(ag, quem_convidou=None):
     return link_whatsapp_numero(convidado.telefone, texto)
 
 
+def link_whatsapp_cobrar_convite(ag, convidado, quem_cobra, url_app=""):
+    """Lembrete pra quem ainda não respondeu o convite de acompanhar (tela Direcionamentos)."""
+    if not convidado or not convidado.telefone:
+        return ""
+    texto = (
+        f"Oi, {primeiro_nome(convidado)}! Lembrete: ainda tá aguardando sua resposta pra acompanhar o "
+        f"{_resumo(ag)} ({ag.cliente}).\n"
+        f"Entra no app, em Meu Calendário, e aceita ou recusa, por favor. "
+        f"Se não responder até 1 dia antes, o convite expira e fica comigo."
+    )
+    if url_app:
+        texto += f"\n{url_app}"
+    return link_whatsapp_numero(convidado.telefone, texto)
+
+
 def link_whatsapp_responsavel_aceito(ag, avisar):
     """Avisa quem convidou que a pessoa escolhida aceitou acompanhar."""
     if not avisar or not avisar.telefone:
@@ -1058,6 +1073,7 @@ def meus_direcionamentos(request):
     """Agendamentos que eu direcionei pra outra pessoa acompanhar, com o status de cada convite."""
     # Só os de hoje em diante (os de hoje continuam aparecendo mesmo depois de terminar).
     agora = regras.inicio_em(timezone.localdate(), 0)
+    url_meu_calendario = request.build_absolute_uri(reverse("meu_calendario"))
     itens = []
     for c in regras.convites_enviados(request.user, agora):
         ag = c.agendamento
@@ -1070,8 +1086,11 @@ def meus_direcionamentos(request):
         else:
             situacao = "Expirado / cancelado"
         quem_atende = "você" if ag.responsavel_id == request.user.pk else nome_usuario(ag.responsavel)
+        cobrar = ""
+        if c.status == Agendamento.RespStatus.PENDENTE:
+            cobrar = link_whatsapp_cobrar_convite(ag, c.convidado, request.user, url_meu_calendario)
         itens.append({"c": c, "ag": ag, "situacao": situacao, "quem_atende": quem_atende,
-                      "sou_eu": ag.responsavel_id == request.user.pk})
+                      "sou_eu": ag.responsavel_id == request.user.pk, "cobrar": cobrar})
     return render(request, "estudio/meus_direcionamentos.html", {"itens": itens, "aba": "meu_calendario"})
 
 

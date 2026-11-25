@@ -1062,3 +1062,18 @@ class AgendaCelularTest(Base):
     def test_botao_no_meu_calendario(self):
         self.client.force_login(self.edicao)
         self.assertContains(self.client.get(reverse("meu_calendario")), reverse("agenda_celular"))
+
+
+class CobrarConviteTest(Base):
+    def test_botao_lembrar_so_nos_convites_aguardando(self):
+        fabio = Usuario.objects.create_user("fabio", password="x", perfil=Usuario.Perfil.ADMIN, telefone="11970164941")
+        pendente = self.agendar(usuario=self.admin, responsavel=fabio)
+        recusado = self.agendar(usuario=self.admin, data=SEG + timedelta(days=1), responsavel=fabio)
+        regras.responder_convite(fabio, recusado, False)
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("meus_direcionamentos"))
+        html = r.content.decode()
+        self.assertEqual(html.count("https://wa.me/5511970164941"), 1)
+        self.assertIn("Lembrar", html)
+        self.assertIn("aguardando%20sua%20resposta", html)
+        self.assertIn(str(pendente.cliente), html)

@@ -8,12 +8,15 @@
 <p class="sub" style="margin:0;font-size:13px">Ensaios e gravações que você pediu pra outra pessoa acompanhar. Se ela recusar ou não responder, quem atende é você — e o compromisso já aparece em Meu Calendário.</p>
 <div class="lista">
 {% for i in itens %}
-<a class="item" href="{% url 'agendamento' i.ag.pk %}">
-<span style="flex:1"><b>{{ i.ag.cliente }}</b><br>
+<div class="item">
+<a href="{% url 'agendamento' i.ag.pk %}" style="flex:1;min-width:0;color:inherit;text-decoration:none"><b>{{ i.ag.cliente }}</b><br>
 <span class="sub" style="font-size:13px">{{ i.ag.get_tipo_display }} · {{ i.ag.inicio|date:"d/m" }} às {{ i.ag.inicio|time:"H:i" }} · pra {{ i.c.convidado }}</span><br>
-<span style="font-size:12.5px;{% if i.sou_eu %}color:var(--ouro);font-weight:600{% else %}color:var(--txt2){% endif %}">Quem atende: {{ i.quem_atende }}</span></span>
+<span style="font-size:12.5px;{% if i.sou_eu %}color:var(--ouro);font-weight:600{% else %}color:var(--txt2){% endif %}">Quem atende: {{ i.quem_atende }}</span></a>
+<span style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
 <span class="pilula{% if i.c.status == 'recusado' %} perigo{% elif i.c.status == 'expirado' %} cinza{% elif i.c.status == 'aceito' %} ok{% endif %}">{{ i.situacao }}</span>
-</a>
+{% if i.cobrar %}<a class="btn pequeno" href="{{ i.cobrar }}" target="_blank" rel="noopener" style="width:auto;min-height:36px;padding:0 12px;font-size:12.5px" aria-label="Lembrar {{ i.c.convidado }} pelo WhatsApp">{% include "estudio/_icone_whats.html" %}Lembrar</a>{% endif %}
+</span>
+</div>
 {% empty %}<div class="vazio">Você ainda não direcionou nenhum ensaio ou gravação pra outra pessoa.</div>{% endfor %}
 </div>
 </main>
