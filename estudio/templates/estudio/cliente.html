@@ -31,7 +31,7 @@
 {% if c.blacklist_manual %}<div class="card perigo"><span style="font-size:14px"><b>Na blacklist:</b> {{ c.motivo_blacklist }}</span></div>{% endif %}
 
 <div class="grade2">
-{% if contato %}<a class="btn ouro" href="https://wa.me/{{ contato.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
+{% if contato %}<a class="btn" href="https://wa.me/{{ contato.whatsapp }}?text={{ saudacao|urlencode:'' }}" target="_blank" rel="noopener">{% include "estudio/_icone_whats.html" with tam=20 %}Mensagem</a>{% endif %}
 <a class="btn" href="{% url 'agendamento_novo' %}?cliente={{ c.pk }}">+ Agendar</a>
 </div>
 

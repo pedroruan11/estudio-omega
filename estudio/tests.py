@@ -1077,3 +1077,11 @@ class CobrarConviteTest(Base):
         self.assertIn("Lembrar", html)
         self.assertIn("aguardando%20sua%20resposta", html)
         self.assertIn(str(pendente.cliente), html)
+
+
+class ClienteMensagemTest(Base):
+    def test_botao_mensagem_com_icone_e_saudacao(self):
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("cliente", args=[self.fire.pk]))
+        self.assertContains(r, "https://wa.me/5511999990000?text=Ol%C3%A1%2C%20Leandro%21%20Aqui%20%C3%A9%20do%20Omega%20Studio.%20")
+        self.assertContains(r, "#25D366")

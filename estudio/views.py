@@ -919,6 +919,7 @@ def cliente(request, pk):
         "c": c,
         "vinculos": c.vinculos.select_related("contato"),
         "contato": c.contato_principal,
+        "saudacao": f"Olá, {c.contato_principal.nome.split()[0]}! Aqui é do Omega Studio. " if c.contato_principal else "",
         "bl": c.na_blacklist,
         "debitos": c.debitos_abertos(),
         "total": brl(c.total_em_aberto()),
