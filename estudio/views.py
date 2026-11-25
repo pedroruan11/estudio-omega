@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import regras
+from .agenda_ics import gerar_ics
 from .forms import AgendamentoForm, ClienteEditarForm, ClienteForm, PrimeiroAcessoForm, RemarcarForm
 from .models import (
     Agendamento,
@@ -1019,6 +1020,36 @@ def meu_calendario_responder(request, pk):
         messages.warning(request, f"Tudo bem, recusado. {ag.responsavel} continua como responsável.")
     return render(request, "estudio/meu_calendario_resposta.html", {
         "ag": ag, "aceitou": aceitar, "whats": whats, "quem_marcou": avisar, "aba": "meu_calendario",
+    })
+
+
+def agenda_ics(request, token):
+    """Link público (com código secreto) que o celular assina pra ver o que a pessoa vai acompanhar."""
+    usuario = Usuario.objects.filter(agenda_token=token, is_active=True).first() if len(token) >= 20 else None
+    if usuario is None:
+        return HttpResponse("Link de agenda inválido.", status=404, content_type="text/plain; charset=utf-8")
+    resp = HttpResponse(
+        gerar_ics(usuario, url_app=request.build_absolute_uri("/").rstrip("/")),
+        content_type="text/calendar; charset=utf-8",
+    )
+    resp["Content-Disposition"] = 'inline; filename="omega-studio.ics"'
+    resp["Cache-Control"] = "no-cache, max-age=0"
+    return resp
+
+
+@login_required
+def agenda_celular(request):
+    """Tela com o link pra assinar a agenda no iPhone / Google Agenda."""
+    if request.method == "POST" and request.POST.get("acao") == "novo":
+        request.user.token_agenda(novo=True)
+        messages.success(request, "Link novo gerado. O antigo parou de funcionar: assine de novo no celular.")
+        return redirect("agenda_celular")
+    token = request.user.token_agenda()
+    url = request.build_absolute_uri(reverse("agenda_ics", args=[token]))
+    return render(request, "estudio/agenda_celular.html", {
+        "url_https": url,
+        "url_webcal": "webcal://" + url.split("://", 1)[1],
+        "aba": "meu_calendario",
     })
 
 

@@ -30,6 +30,10 @@ class Usuario(AbstractUser):
         "WhatsApp", max_length=20, blank=True,
         help_text="Usado para mandar o pedido de confirmação quando essa pessoa é escolhida como responsável por um ensaio/gravação.",
     )
+    agenda_token = models.CharField(
+        max_length=40, blank=True, db_index=True,
+        help_text="Código secreto do link da agenda do celular (assinatura .ics). Vazio = ainda não gerado.",
+    )
 
     @property
     def is_admin(self):
@@ -48,6 +52,14 @@ class Usuario(AbstractUser):
     @property
     def telefone_formatado(self):
         return _whatsapp_formatado(self.telefone)
+
+    def token_agenda(self, novo=False):
+        """Código do link da agenda do celular; gera na primeira vez (ou um novo, se pedir)."""
+        if novo or not self.agenda_token:
+            import secrets
+            self.agenda_token = secrets.token_urlsafe(24)
+            self.save(update_fields=["agenda_token"])
+        return self.agenda_token
 
     def dias_indisponiveis_entre(self, inicio, fim):
         """Datas (set) em que esse usuário marcou que não pode acompanhar, dentro do intervalo."""

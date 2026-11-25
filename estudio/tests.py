@@ -1019,3 +1019,46 @@ class TecnicoDoDiaTest(Base):
         self.assertEqual(j["fixo"]["id"], self.dudu.pk)
         j = self.client.get(reverse("responsaveis_json") + "?data=2030-01-08").json()
         self.assertIsNone(j["fixo"])
+
+
+class AgendaCelularTest(Base):
+    def test_feed_so_com_o_que_eu_atendo_e_lembrete_1_dia(self):
+        meu = self.agendar(usuario=self.admin, observacao="Trazer cabo, por favor")
+        outro = self.agendar(data=SAB, hora=10, usuario=self.edicao)
+        cancelado = self.agendar(data=SAB, hora=14, usuario=self.admin)
+        cancelado.status = Agendamento.Status.CANCELADO
+        cancelado.save()
+        self.assertEqual(meu.responsavel, self.admin)
+        token = self.admin.token_agenda()
+        r = self.client.get(reverse("agenda_ics", args=[token]))
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r["Content-Type"].startswith("text/calendar"))
+        txt = r.content.decode()
+        self.assertIn(f"UID:agendamento-{meu.pk}@estudio-omega", txt)
+        self.assertNotIn(f"agendamento-{outro.pk}@", txt)
+        self.assertNotIn(f"agendamento-{cancelado.pk}@", txt)
+        self.assertIn("DTSTART:20300107T210000Z", txt)  # 18h em São Paulo
+        self.assertIn("DTEND:20300107T230000Z", txt)
+        self.assertIn("TRIGGER:-P1D", txt)
+        self.assertIn("SUMMARY:Ensaio · FIRE", txt)
+        self.assertIn("cabo\\, por favor", txt)
+        for linha in txt.split("\r\n"):
+            self.assertLessEqual(len(linha.encode()), 75)
+
+    def test_link_invalido_e_link_novo(self):
+        self.assertEqual(self.client.get("/agenda/" + "x" * 32 + ".ics").status_code, 404)
+        antigo = self.admin.token_agenda()
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("agenda_celular"))
+        self.assertContains(r, "webcal://")
+        self.assertContains(r, antigo)
+        self.client.post(reverse("agenda_celular"), {"acao": "novo"})
+        self.admin.refresh_from_db()
+        self.assertNotEqual(self.admin.agenda_token, antigo)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("agenda_ics", args=[antigo])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("agenda_ics", args=[self.admin.agenda_token])).status_code, 200)
+
+    def test_botao_no_meu_calendario(self):
+        self.client.force_login(self.edicao)
+        self.assertContains(self.client.get(reverse("meu_calendario")), reverse("agenda_celular"))

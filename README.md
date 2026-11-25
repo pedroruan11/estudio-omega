@@ -28,6 +28,11 @@ Para o app abrir rápido no celular, um serviço externo acessa a rota `/saude` 
   - Timeout de 30 s: se o app estiver dormindo, o primeiro acesso pode aparecer como falha no histórico. É normal; os seguintes devem dar 200 OK.
 - **Reserva manual: GitHub Actions** (`.github/workflows/despertador.yml`), sem agendamento (o cron do GitHub no plano gratuito não disparava). Para acordar o app na mão: Actions → Despertador → Run workflow.
 
+## Agenda do celular
+Em Meu Calendário → **Agenda do celular**, cada pessoa assina um link `.ics` (`/agenda/<código>.ics`) com o que ela vai acompanhar.
+O link não pede login: o código secreto (campo `agenda_token` do usuário) é a proteção, e dá pra gerar um novo na mesma tela.
+Cada evento tem lembrete 1 dia antes; cancelados e os que passaram pra outra pessoa somem. Código em `estudio/agenda_ics.py`.
+
 ## Primeiro acesso
 Com o banco vazio, o sistema abre a tela **Primeiro acesso** para criar o primeiro Administrador.
 Depois disso a tela some. Outros usuários são criados pelo Administrador em Mais → Usuários, preços e horários.

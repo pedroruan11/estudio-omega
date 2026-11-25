@@ -1,0 +1,50 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Agenda do celular{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'meu_calendario' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Agenda do celular</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:18px">
+
+<p class="sub" style="margin:0">Tudo o que <b style="color:var(--txt)">você</b> vai acompanhar aparece sozinho na agenda do celular, com lembrete <b style="color:var(--txt)">1 dia antes</b>. Se marcarem, remarcarem, cancelarem ou passarem pra você, a agenda acompanha. Faça isso uma vez só.</p>
+
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+<span class="kicker ouro">iPhone</span>
+<a class="btn ouro" href="{{ url_webcal }}">Adicionar ao Calendário do iPhone</a>
+<ol class="sub" style="margin:0;padding-left:20px;font-size:13.5px;display:flex;flex-direction:column;gap:4px">
+<li>Toque no botão acima e depois em <b>Assinar</b>.</li>
+<li>Na tela seguinte, <b>desligue “Remover Alertas”</b> (senão o lembrete de 1 dia antes não toca).</li>
+<li>Toque em <b>Adicionar</b>.</li>
+</ol>
+</section>
+
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+<span class="kicker ouro">Android (Google Agenda)</span>
+<button type="button" class="btn" id="btn-copiar">Copiar link da agenda</button>
+<input type="text" id="link-agenda" value="{{ url_https }}" readonly aria-label="Link da agenda" style="font-size:12.5px">
+<ol class="sub" style="margin:0;padding-left:20px;font-size:13.5px;display:flex;flex-direction:column;gap:4px">
+<li>O app do Google Agenda não aceita esse link direto: abra <b>calendar.google.com</b> no navegador (computador ou “versão para computador” no celular).</li>
+<li>Em <b>Outras agendas</b>, toque em <b>+</b> → <b>Do URL</b>, cole o link e confirme.</li>
+<li>No app do Google Agenda, abra Configurações → Omega Studio → <b>Notificações</b> e coloque <b>1 dia antes</b>.</li>
+</ol>
+<div class="aviso" style="font-size:13px">O Google demora algumas horas pra puxar mudanças. Pra ensaio marcado em cima da hora, confira no app.</div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:8px">
+<p class="sub" style="margin:0;font-size:13px">Esse link é só seu: quem tiver ele vê os seus horários. Se mandou pra alguém sem querer, gere um novo (aí precisa assinar de novo no celular).</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="acao" value="novo"><button type="submit" class="btn pequeno perigo">Gerar link novo</button></form>
+</section>
+
+</main>
+<script>
+(function(){
+  var b=document.getElementById('btn-copiar'),i=document.getElementById('link-agenda');
+  function ok(){b.textContent='Link copiado!';setTimeout(function(){b.textContent='Copiar link da agenda'},2500)}
+  function antigo(){i.focus();i.select();i.setSelectionRange(0,9999);try{return document.execCommand('copy')}catch(e){return false}}
+  b.addEventListener('click',function(){
+    if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(i.value).then(ok,function(){antigo()&&ok()})}
+    else if(antigo()){ok()}
+  });
+})();
+</script>
+{% endblock %}
