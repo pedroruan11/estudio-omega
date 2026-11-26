@@ -116,7 +116,7 @@ const DIAS_C=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const f=document.getElementById('form-ag');
 const $=id=>document.getElementById(id);
 const campo={tipo:$('f-tipo'),cliente:$('f-cliente'),data:$('f-data'),hora:$('f-hora'),horas:$('f-horas'),pratos:$('f-pratos'),resp:$('f-resp')};
-const est={passo:'tipo',clienteNome:'{{ selecionado.nome|default:""|escapejs }}',pratosEscolhido:{% if valores.pratos %}true{% else %}false{% endif %},tecNome:'',mes:null,
+const est={passo:'tipo',clienteNome:'{{ selecionado.nome|default:""|escapejs }}',pratosEscolhido:{% if valores.pratos %}true{% else %}false{% endif %},isento:{{ selecionado.nao_paga_ensaio|yesno:'true,false' }},tecNome:'',mes:null,
   pularCliente:!!campo.cliente.value&&!{{ voltou_com_erro|yesno:"true,false" }},pularDia:!!campo.data.value&&!{{ voltou_com_erro|yesno:"true,false" }}};
 const hl=h=>(h%24===0?'00':String(h))+'h';
 const dataObj=s=>{const [a,m,d]=s.split('-').map(Number);return new Date(a,m-1,d)};
@@ -176,8 +176,9 @@ busca.addEventListener('input',()=>{
 });
 function mostrarSituacao(html){const box=$('situacao');box.innerHTML=html||'';box.classList.toggle('oculto',!html);$('cliente-continuar').classList.toggle('oculto',!html)}
 document.querySelectorAll('.wz-cli').forEach(b=>b.addEventListener('click',async()=>{
-  campo.cliente.value=b.dataset.id;est.clienteNome=b.dataset.nome;marcarEscolhas();
+  campo.cliente.value=b.dataset.id;est.clienteNome=b.dataset.nome;est.isento=false;marcarEscolhas();
   let j=null;try{j=await (await fetch(`/clientes/${b.dataset.id}/situacao.json`)).json()}catch(e){}
+  est.isento=!!(j&&j.nao_paga_ensaio);
   const partes=[];
   if(j&&j.blacklist)partes.push(`<div class="erro"><b>Cliente na blacklist</b>${j.em_aberto?` · débito de ${j.em_aberto}`:''}. ${j.is_admin?'Você é administrador: ao confirmar, o sistema pede uma confirmação extra.':'Só um administrador pode concluir este agendamento.'}</div>`);
   if(j)j.avisos.forEach(a=>partes.push(`<div class="aviso">${a.replace(/</g,'&lt;')}</div>`));
@@ -243,7 +244,7 @@ function mostrarFins(it){
   it.fins.forEach(fim=>{
     const h=fim-it.hora;
     const b=document.createElement('button');b.type='button';b.className='wz-fim';
-    b.innerHTML=`<b>${hl(fim)}</b><span>${h}h · R$ ${(h*preco[tipo]).toLocaleString('pt-BR')}</span>`;
+    b.innerHTML=`<b>${hl(fim)}</b><span>${h}h · ${tipo==='ensaio'&&est.isento?'não paga':'R$ '+(h*preco[tipo]).toLocaleString('pt-BR')}</span>`;
     b.addEventListener('click',()=>{campo.horas.value=h;irPara('pratos')});
     box.append(b);
   });

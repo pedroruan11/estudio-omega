@@ -517,6 +517,13 @@ def _quando_feira(ag):
 def texto_confirmacao_cliente(ag):
     """Mensagem automática de confirmação (tela final do novo agendamento). Cita a taxa em %, nunca o valor."""
     pct = regras.percentual_taxa(ag.tipo)
+    if regras.isento_de_pagamento(ag):
+        return (
+            f"{ag.cliente.nome}, esta é uma mensagem automática de confirmação.\n\n"
+            f"Agendamento de {ag.get_tipo_display().lower()}: {_quando_feira(ag)}.\n\n"
+            f"Se precisar cancelar ou remarcar, é só avisar.\n\n"
+            f"Obrigado e muito som 🤘"
+        )
     return (
         f"{ag.cliente.nome}, esta é uma mensagem automática de confirmação.\n\n"
         f"Agendamento de {ag.get_tipo_display().lower()}: {_quando_feira(ag)}.\n\n"
@@ -547,6 +554,8 @@ def _resumo(ag):
 
 
 def _texto_taxa_cancelamento(ag):
+    if regras.isento_de_pagamento(ag):
+        return ""
     pct = regras.percentual_taxa(ag.tipo)
     return f"Cancelamento ou falta com menos de 48h tem taxa de cancelamento de {pct}% do valor do {ag.get_tipo_display().lower()}."
 
@@ -557,13 +566,13 @@ def link_whatsapp_confirmacao(ag):
         f"Olá, {nome}! Seu {_resumo(ag)} está confirmado. 🎸\n"
         f"{_texto_taxa_cancelamento(ag)}\n"
         f"Endereço: {ENDERECO}."
-    )
+    ).replace("\n\n", "\n")
     return link_whatsapp(ag.contato, texto)
 
 
 def link_whatsapp_lembrete(ag):
     nome = ag.contato.nome.split()[0] if ag.contato else ""
-    texto = f"Olá, {nome}! Passando para lembrar do seu {_resumo(ag)}. {_texto_taxa_cancelamento(ag)} Te esperamos! {ENDERECO}."
+    texto = f"Olá, {nome}! Passando para lembrar do seu {_resumo(ag)}. {_texto_taxa_cancelamento(ag)} Te esperamos! {ENDERECO}.".replace("  ", " ")
     return link_whatsapp(ag.contato, texto)
 
 
@@ -574,7 +583,7 @@ def link_whatsapp_lembrete_hoje(ag):
     texto = (
         f"Oi, {nome}! Passando pra lembrar do seu {ag.get_tipo_display().lower()} hoje, "
         f"das {ini:%H}h às {fim:%H}h, no Omega Studio. {_texto_taxa_cancelamento(ag)} Até já! 🎸"
-    )
+    ).replace("  ", " ")
     return link_whatsapp(ag.contato, texto)
 
 
@@ -748,6 +757,7 @@ def cliente_situacao(request, pk):
         "em_aberto": brl(cliente.total_em_aberto()) if cliente.debitos_abertos().exists() else "",
         "avisos": avisos,
         "is_admin": request.user.is_admin,
+        "nao_paga_ensaio": cliente.nao_paga_ensaio,
     })
 
 
@@ -764,7 +774,7 @@ def agendamento(request, pk):
         "ini": timezone.localtime(ag.inicio),
         "fim": timezone.localtime(ag.fim),
         "dia": data_extenso(timezone.localdate(ag.inicio)),
-        "valor": brl(ag.valor_total),
+        "valor": "Não paga" if regras.isento_de_pagamento(ag) else brl(ag.valor_total),
         "ativo": ag.status == Agendamento.Status.AGENDADO,
         "tardio": tardio,
         "pode_remarcar": ag.status == Agendamento.Status.AGENDADO and (not tardio or request.user.is_admin),
@@ -812,7 +822,10 @@ def agendamento_cancelar(request, pk):
         "perigo": tem_taxa,
         "texto": (
             f"Faltam menos de 48h. Será gerada uma taxa de {brl(valor)} e {ag.cliente} entra na blacklist até pagar."
-            if tem_taxa else "Ainda está dentro do prazo: cancelamento sem custo."
+            if tem_taxa else (
+                f"{ag.cliente} não paga ensaio: cancelamento sem custo, mesmo em cima da hora."
+                if regras.isento_de_pagamento(ag) else "Ainda está dentro do prazo: cancelamento sem custo."
+            )
         ),
     })
 
@@ -856,7 +869,10 @@ def agendamento_falta(request, pk):
     except regras.RegraErro as e:
         messages.error(request, str(e))
     else:
-        messages.warning(request, f"Falta registrada. Taxa de {brl(debito.valor)}; {ag.cliente} entrou na blacklist.")
+        if debito:
+            messages.warning(request, f"Falta registrada. Taxa de {brl(debito.valor)}; {ag.cliente} entrou na blacklist.")
+        else:
+            messages.success(request, f"Falta registrada, sem taxa ({ag.cliente} não paga ensaio).")
     return redirect("agendamento", pk=pk)
 
 
@@ -944,6 +960,8 @@ def cliente_editar(request, pk):
     form = ClienteEditarForm(request.POST or None, instance=c)
     if request.method == "POST" and form.is_valid():
         form.save()
+        if request.user.is_admin:
+            regras.definir_nao_paga_ensaio(c, bool(request.POST.get("nao_paga_ensaio")))
         if contato:
             contato.nome = request.POST.get("contato_nome", contato.nome).strip() or contato.nome
             novo = request.POST.get("contato_whatsapp", "").strip()

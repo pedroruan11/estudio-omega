@@ -11,6 +11,10 @@
 <label class="campo">Nome<input type="text" name="nome" required value="{{ form.nome.value|default:'' }}"></label>
 <label class="campo">Instagram<input type="text" name="instagram" value="{{ form.instagram.value|default:'' }}" autocapitalize="none"></label>
 <label class="campo">Como nos conheceu?<select name="origem">{% for v, l in form.fields.origem.choices %}<option value="{{ v }}"{% if form.origem.value == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+{% if user.is_admin %}
+<label class="check"><input type="checkbox" name="nao_paga_ensaio"{% if c.nao_paga_ensaio %} checked{% endif %}> Não paga ensaio (banda da casa)</label>
+<small class="sub" style="margin-top:-8px">Ensaio sai a R$ 0, não conta no valor das estatísticas e cancelamento, remarcação ou falta não geram taxa.</small>
+{% endif %}
 {% if contato %}
 <span class="kicker" style="margin-top:8px">Contato principal</span>
 <label class="campo">Nome do contato<input type="text" name="contato_nome" value="{{ contato.nome }}"></label>

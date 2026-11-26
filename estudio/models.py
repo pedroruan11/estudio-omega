@@ -184,6 +184,11 @@ class Cliente(models.Model):
     instagram = models.CharField(max_length=60, blank=True)
     blacklist_manual = models.BooleanField("Na blacklist (manual)", default=False)
     motivo_blacklist = models.CharField(max_length=255, blank=True)
+    nao_paga_ensaio = models.BooleanField(
+        "Não paga ensaio", default=False,
+        help_text="Banda da casa (ex.: FIRE): ensaio sai a R$ 0, não entra no valor das estatísticas "
+                  "e cancelamento/remarcação/falta não geram taxa.",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     contatos = models.ManyToManyField(Contato, through="Vinculo", related_name="clientes")
 

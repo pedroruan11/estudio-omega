@@ -10,7 +10,7 @@
 <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
 <h1 style="margin:0;font-size:24px">{{ c.nome }}</h1>
 {% if contato %}<span class="sub">{{ contato.nome }}{% if c.tipo == 'banda' %} · responsável{% endif %}</span>{% endif %}
-<span>{% if bl %}<span class="pilula perigo">Blacklist</span>{% else %}<span class="pilula ok">Em dia</span>{% endif %}</span>
+<span>{% if bl %}<span class="pilula perigo">Blacklist</span>{% else %}<span class="pilula ok">Em dia</span>{% endif %}{% if c.nao_paga_ensaio %} <span class="pilula cinza">Não paga ensaio</span>{% endif %}</span>
 </div>
 </div>
 

@@ -1092,3 +1092,70 @@ class ClienteMensagemTest(Base):
         self.assertContains(r, "https://wa.me/5511999990000?text=Ol%C3%A1%2C%20Leandro%21%20Aqui%20%C3%A9%20do%20Omega%20Studio.%20")
         self.assertContains(r, "#25D366")
 
+
+
+class NaoPagaEnsaioTest(Base):
+    """Banda da casa (FIRE, 26/11/2026): ensaio não tem valor nem taxa, mesmo cancelado em cima da hora."""
+
+    def setUp(self):
+        super().setUp()
+        self.fire.nao_paga_ensaio = True
+        self.fire.save()
+
+    def test_ensaio_sai_a_zero(self):
+        ag = self.agendar(horas=4)
+        self.assertEqual(ag.valor_total, Decimal("0"))
+
+    def test_gravacao_continua_paga(self):
+        ag = self.agendar(tipo="gravacao", horas=1)
+        self.assertEqual(ag.valor_total, Decimal("400"))
+
+    def test_cancelar_tardio_sem_taxa(self):
+        ag = self.agendar()
+        self.assertEqual(regras.previa_cancelamento(ag, agora=ag.inicio - timedelta(hours=2)), (False, Decimal("0")))
+        self.assertIsNone(regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=2)))
+        self.assertFalse(self.fire.na_blacklist)
+        self.assertFalse(Debito.objects.exists())
+
+    def test_remarcar_tardio_sem_taxa_e_edicao_pode(self):
+        ag = self.agendar()
+        self.assertIsNone(regras.remarcar(self.edicao, ag, SEG, 20, agora=ag.inicio - timedelta(hours=3)))
+        self.assertFalse(Debito.objects.exists())
+
+    def test_falta_sem_taxa(self):
+        ag = self.agendar()
+        self.assertIsNone(regras.marcar_falta(self.edicao, ag, agora=ag.inicio + timedelta(minutes=30)))
+        self.assertFalse(self.fire.na_blacklist)
+
+    def test_outra_banda_continua_pagando(self):
+        outra = criar_cliente("Outra", self.leandro)
+        ag = self.agendar(cliente=outra, horas=2)
+        self.assertEqual(ag.valor_total, Decimal("140"))
+        self.assertIsNotNone(regras.cancelar(self.edicao, ag, agora=ag.inicio - timedelta(hours=2)))
+
+    def test_mensagens_sem_taxa(self):
+        from .views import _texto_taxa_cancelamento, texto_confirmacao_cliente
+        ag = self.agendar()
+        self.assertEqual(_texto_taxa_cancelamento(ag), "")
+        self.assertNotIn("%", texto_confirmacao_cliente(ag))
+
+    def test_admin_liga_e_desliga_na_edicao(self):
+        outra = criar_cliente("Outra", self.leandro)
+        ag = regras.criar_agendamento(self.edicao, outra, "ensaio", SEG, 18, 2)  # futuro (2030)
+        self.client.force_login(self.admin)
+        dados = {"tipo": "banda", "nome": "Outra", "instagram": "", "origem": "", "nao_paga_ensaio": "on"}
+        self.client.post(reverse("cliente_editar", args=[outra.pk]), dados)
+        outra.refresh_from_db(); ag.refresh_from_db()
+        self.assertTrue(outra.nao_paga_ensaio)
+        self.assertEqual(ag.valor_total, Decimal("0"))
+        dados.pop("nao_paga_ensaio")
+        self.client.post(reverse("cliente_editar", args=[outra.pk]), dados)
+        ag.refresh_from_db()
+        self.assertEqual(ag.valor_total, Decimal("140"))
+
+    def test_edicao_nao_altera(self):
+        self.client.force_login(self.edicao)
+        dados = {"tipo": "banda", "nome": "FIRE", "instagram": "", "origem": ""}
+        self.client.post(reverse("cliente_editar", args=[self.fire.pk]), dados)
+        self.fire.refresh_from_db()
+        self.assertTrue(self.fire.nao_paga_ensaio)

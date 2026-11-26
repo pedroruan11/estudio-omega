@@ -81,8 +81,16 @@ def inicio_em(data, hora):
     return timezone.make_aware(datetime.combine(data, time(hour=hora)))
 
 
+def isento_de_pagamento(agendamento):
+    """Ensaio de banda que não paga (ex.: FIRE, banda do Pedro): sem valor e sem taxa nenhuma."""
+    return agendamento.tipo == Agendamento.Tipo.ENSAIO and agendamento.cliente.nao_paga_ensaio
+
+
 def esta_no_prazo_de_taxa(agendamento, agora=None, cfg=None):
-    """True quando faltam menos de 48h (ou o configurado) para o início."""
+    """True quando faltam menos de 48h (ou o configurado) para o início.
+    Ensaio de banda isenta nunca entra no prazo de taxa (cancela/remarca sem custo)."""
+    if isento_de_pagamento(agendamento):
+        return False
     cfg = cfg or Configuracao.atual()
     agora = agora or timezone.now()
     return agora > agendamento.inicio - timedelta(hours=cfg.antecedencia_horas)
@@ -90,7 +98,9 @@ def esta_no_prazo_de_taxa(agendamento, agora=None, cfg=None):
 
 # ---------- valores ----------
 
-def preco_hora(tipo, cfg=None):
+def preco_hora(tipo, cfg=None, cliente=None):
+    if cliente is not None and tipo == Agendamento.Tipo.ENSAIO and cliente.nao_paga_ensaio:
+        return Decimal("0")
     cfg = cfg or Configuracao.atual()
     return cfg.preco_ensaio if tipo == Agendamento.Tipo.ENSAIO else cfg.preco_gravacao
 
@@ -419,7 +429,7 @@ def criar_agendamento(
         if escala:
             ag = Agendamento.objects.create(
                 cliente=cliente, contato=contato or cliente.contato_principal, tipo=tipo, inicio=inicio, horas=horas,
-                valor_hora=preco_hora(tipo, cfg), criado_por=usuario, observacao=observacao, pratos=bool(pratos),
+                valor_hora=preco_hora(tipo, cfg, cliente), criado_por=usuario, observacao=observacao, pratos=bool(pratos),
                 responsavel=escala["responsavel"],
             )
             _escalar_no_dia(ag, escala, agora)
@@ -441,7 +451,7 @@ def criar_agendamento(
             tipo=tipo,
             inicio=inicio,
             horas=horas,
-            valor_hora=preco_hora(tipo, cfg),
+            valor_hora=preco_hora(tipo, cfg, cliente),
             criado_por=usuario,
             observacao=observacao,
             pratos=bool(pratos),
@@ -460,7 +470,23 @@ def criar_agendamento(
         return ag
 
 
+def definir_nao_paga_ensaio(cliente, valor, agora=None):
+    """Liga/desliga 'não paga ensaio' (só Administrador, pela edição do cliente).
+    Os ensaios ativos daqui pra frente passam a sair a R$ 0 (ou voltam pro preço atual)."""
+    valor = bool(valor)
+    if cliente.nao_paga_ensaio == valor:
+        return
+    agora = agora or timezone.now()
+    cliente.nao_paga_ensaio = valor
+    cliente.save(update_fields=["nao_paga_ensaio"])
+    Agendamento.objects.filter(
+        cliente=cliente, tipo=Agendamento.Tipo.ENSAIO, status=Agendamento.Status.AGENDADO, inicio__gte=agora,
+    ).update(valor_hora=preco_hora(Agendamento.Tipo.ENSAIO, cliente=cliente))
+
+
 def _gerar_debito(usuario, ag, motivo, cfg):
+    if isento_de_pagamento(ag):
+        return None
     valor = valor_taxa(ag, cfg)
     pct = percentual_taxa(ag.tipo, cfg)
     ini = timezone.localtime(ag.inicio)
@@ -534,7 +560,7 @@ def marcar_falta(usuario, ag, agora=None):
         raise RegraErro("Só dá para marcar falta depois do horário de início.")
     with transaction.atomic():
         cfg = _travar()
-        debito = _gerar_debito(usuario, ag, Debito.Motivo.FALTA, cfg)
+        debito = _gerar_debito(usuario, ag, Debito.Motivo.FALTA, cfg)  # None se a banda não paga ensaio
         ag.status = Agendamento.Status.FALTA
         ag.save()
         notificar(usuario, Notificacao.Tipo.FALTA, f"marcou falta de {ag.cliente} · {_quando(ag)}", ag)
