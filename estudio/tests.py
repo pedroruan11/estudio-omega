@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from . import regras
-from .models import Agendamento, Cliente, Contato, Debito, HorarioFuncionamento, Notificacao, TravamentoAgenda, Usuario, Vinculo
+from .models import Agendamento, Cliente, Contato, Debito, Despesa, HorarioFuncionamento, Notificacao, TravamentoAgenda, Usuario, Vinculo
 
 SEG = date(2030, 1, 7)  # segunda-feira: 18h–00h
 SAB = date(2030, 1, 12)  # sábado: 09h–23h
@@ -311,7 +311,7 @@ bkp.EM_SEGUNDO_PLANO = False
 
 
 class GestaoAcessoTest(Base):
-    PAGINAS = ["financeiro", "estatisticas", "configuracoes", "backups", "usuario_novo", "backup_restaurar_arquivo"]
+    PAGINAS = ["financeiro", "financeiro_receitas", "financeiro_despesas", "financeiro_configurar", "estatisticas", "configuracoes", "backups", "usuario_novo", "backup_restaurar_arquivo"]
 
     def test_admin_abre_tudo(self):
         self.client.force_login(self.admin)
@@ -334,7 +334,7 @@ class GestaoAcessoTest(Base):
 class FinanceiroTest(Base):
     def test_salvar_precos_com_virgula(self):
         self.client.force_login(self.admin)
-        r = self.client.post(reverse("financeiro"), {
+        r = self.client.post(reverse("financeiro_configurar"), {
             "preco_ensaio": "80,00", "preco_gravacao": "450", "taxa_ensaio_pct": "70", "taxa_gravacao_pct": "50",
             "antecedencia_horas": "48", "min_horas_ensaio": "2", "min_horas_gravacao": "1", "max_horas": "6",
         })
@@ -1159,3 +1159,46 @@ class NaoPagaEnsaioTest(Base):
         self.client.post(reverse("cliente_editar", args=[self.fire.pk]), dados)
         self.fire.refresh_from_db()
         self.assertTrue(self.fire.nao_paga_ensaio)
+
+
+class FinanceiroReceitasDespesasTest(Base):
+    """Financeiro com Receitas e Despesas (26/11/2026)."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.admin)
+
+    def test_despesas_iniciais_somam_3550(self):
+        self.assertEqual(Despesa.objects.count(), 7)
+        self.assertEqual(Despesa.total_mensal(), Decimal("3550"))
+        r = self.client.get(reverse("financeiro_despesas"))
+        self.assertContains(r, "Em breve")
+        self.assertContains(r, "R$ 3.550")
+
+    def test_editar_despesa(self):
+        aluguel = Despesa.objects.get(nome="Aluguel")
+        dados = {f"valor-{d.pk}": str(d.valor) for d in Despesa.objects.filter(em_breve=False)}
+        dados[f"valor-{aluguel.pk}"] = "1.300,00"
+        self.client.post(reverse("financeiro_despesas"), dados)
+        self.assertEqual(Despesa.total_mensal(), Decimal("3650"))
+        dados[f"valor-{aluguel.pk}"] = "1.250"
+        self.client.post(reverse("financeiro_despesas"), dados)
+        self.assertEqual(Despesa.objects.get(pk=aluguel.pk).valor, Decimal("1250"))
+        dados[f"valor-{aluguel.pk}"] = "abc"
+        r = self.client.post(reverse("financeiro_despesas"), dados)
+        self.assertContains(r, "Valor inválido em Aluguel")
+
+    def test_receita_menos_despesa(self):
+        self.agendar(horas=4)  # ensaio R$ 280
+        self.agendar(data=SAB, hora=10, tipo="gravacao", horas=2)  # R$ 800
+        r = self.client.get(reverse("financeiro_receitas") + "?m=2030-01")
+        self.assertContains(r, "R$ 1.080")
+        self.assertContains(r, "R$ 3.550")
+        self.assertContains(r, "R$ 2.470")  # 1.080 − 3.550 = −2.470
+        self.assertTrue(r.context["negativo"])
+        self.assertContains(r, reverse("financeiro_configurar"))
+
+    def test_entrada_tem_os_dois_botoes(self):
+        r = self.client.get(reverse("financeiro"))
+        self.assertContains(r, reverse("financeiro_receitas"))
+        self.assertContains(r, reverse("financeiro_despesas"))

@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 from .models import (
+    Despesa,
     Agendamento,
     Anotacao,
     Cliente,
@@ -58,5 +59,6 @@ class DebitoAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Configuracao)
+admin.site.register(Despesa)
 admin.site.register(HorarioFuncionamento)
 admin.site.register(Anotacao)

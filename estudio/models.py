@@ -68,6 +68,31 @@ class Usuario(AbstractUser):
         )
 
 
+class Despesa(models.Model):
+    """Despesa mensal média do estúdio (Financeiro → Despesas). Editável pelo Administrador."""
+
+    class Tipo(models.TextChoices):
+        FIXA = "fixa", "Fixa"
+        VARIAVEL = "variavel", "Variável"
+
+    nome = models.CharField(max_length=60)
+    detalhe = models.CharField(max_length=120, blank=True)
+    tipo = models.CharField(max_length=10, choices=Tipo.choices, default=Tipo.FIXA)
+    valor = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    em_breve = models.BooleanField(default=False, help_text="Ainda sem valor; aparece como 'Em breve'.")
+    ordem = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["tipo", "ordem", "id"]
+
+    def __str__(self):
+        return self.nome
+
+    @classmethod
+    def total_mensal(cls):
+        return cls.objects.filter(em_breve=False).aggregate(t=models.Sum("valor"))["t"] or Decimal("0")
+
+
 class Configuracao(models.Model):
     preco_ensaio = models.DecimalField("Preço da hora de ensaio", max_digits=8, decimal_places=2, default=Decimal("70"))
     preco_gravacao = models.DecimalField("Preço da hora de gravação", max_digits=8, decimal_places=2, default=Decimal("400"))

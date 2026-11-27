@@ -1,6 +1,7 @@
 """Telas de gestão (fase 2): Financeiro, Estatísticas, Configurações e Backup. Só Administrador,
 exceto 'Trocar minha senha' (na fase 1)."""
 import calendar
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -14,7 +15,7 @@ from django.views.decorators.http import require_POST
 from . import backup as bkp
 from . import regras
 from .forms import FinanceiroForm, HorarioFormSet, RedefinirSenhaForm, UsuarioEditarForm, UsuarioNovoForm
-from .models import Agendamento, Backup, Cliente, Configuracao, Debito, HorarioFuncionamento, Usuario
+from .models import Agendamento, Backup, Cliente, Configuracao, Debito, Despesa, HorarioFuncionamento, Usuario
 from .views import MESES, admin_required, brl
 
 
@@ -22,15 +23,117 @@ from .views import MESES, admin_required, brl
 
 @admin_required
 def financeiro(request):
+    """Entrada do Financeiro: dois botões, Receitas e Despesas."""
+    base = timezone.localdate().replace(day=1)
+    receita = receita_do_mes(base)["valor"]
+    despesas = Despesa.total_mensal()
+    return render(request, "estudio/financeiro.html", {
+        "receita": brl(receita),
+        "despesas": brl(despesas),
+        "mes": MESES[base.month - 1],
+        "aba": "mais",
+    })
+
+
+def receita_do_mes(base):
+    """Valor dos ensaios e gravações ativos do mês (o mesmo 'valor estimado' das Estatísticas)."""
+    ultimo = calendar.monthrange(base.year, base.month)[1]
+    ini = regras.inicio_em(base, 0)
+    fim = regras.inicio_em(base.replace(day=ultimo), 0) + timedelta(days=1)
+    validos = Agendamento.objects.filter(inicio__gte=ini, inicio__lt=fim, status=Agendamento.Status.AGENDADO)
+    ensaios = validos.filter(tipo=Agendamento.Tipo.ENSAIO)
+    gravacoes = validos.filter(tipo=Agendamento.Tipo.GRAVACAO)
+    valor_ensaio = sum((a.valor_total for a in ensaios.only("valor_hora", "horas")), Decimal("0"))
+    valor_grav = sum((a.valor_total for a in gravacoes.only("valor_hora", "horas")), Decimal("0"))
+    return {
+        "valor": valor_ensaio + valor_grav, "valor_ensaio": valor_ensaio, "valor_grav": valor_grav,
+        "qtd_ensaios": ensaios.count(), "qtd_gravacoes": gravacoes.count(),
+    }
+
+
+def _navegacao_mes(base):
+    ultimo = calendar.monthrange(base.year, base.month)[1]
+    ant = (base - timedelta(days=1)).replace(day=1)
+    prox = base.replace(day=ultimo) + timedelta(days=1)
+    return {
+        "titulo": f"{MESES[base.month - 1].capitalize()} {base.year}",
+        "anterior": f"{ant.year}-{ant.month:02d}",
+        "proxima": f"{prox.year}-{prox.month:02d}",
+    }
+
+
+@admin_required
+def financeiro_receitas(request):
+    base = _mes_param(request)
+    r = receita_do_mes(base)
+    despesas = Despesa.total_mensal()
+    resultado = r["valor"] - despesas
+    return render(request, "estudio/financeiro_receitas.html", {
+        **_navegacao_mes(base),
+        "qtd_ensaios": r["qtd_ensaios"],
+        "qtd_gravacoes": r["qtd_gravacoes"],
+        "valor_ensaio": brl(r["valor_ensaio"]),
+        "valor_grav": brl(r["valor_grav"]),
+        "receita": brl(r["valor"]),
+        "despesas": brl(despesas),
+        "resultado": brl(abs(resultado)),
+        "negativo": resultado < 0,
+        "aba": "mais",
+    })
+
+
+@admin_required
+def financeiro_despesas(request):
+    itens = list(Despesa.objects.all())
+    erro = None
+    if request.method == "POST":
+        novos = {}
+        for d in itens:
+            if d.em_breve:
+                continue
+            bruto = request.POST.get(f"valor-{d.pk}", "").strip().replace("R$", "").replace(" ", "")
+            if "," in bruto:  # 1.200,50
+                bruto = bruto.replace(".", "").replace(",", ".")
+            elif re.fullmatch(r"\d{1,3}(\.\d{3})+", bruto):  # 1.200
+                bruto = bruto.replace(".", "")
+            try:
+                v = Decimal(bruto or "0")
+                if v < 0:
+                    raise ValueError
+            except (ArithmeticError, ValueError):
+                erro = f"Valor inválido em {d.nome}."
+                break
+            novos[d.pk] = v
+        if not erro:
+            for d in itens:
+                if d.pk in novos and d.valor != novos[d.pk]:
+                    d.valor = novos[d.pk]
+                    d.save(update_fields=["valor"])
+            messages.success(request, "Despesas atualizadas.")
+            return redirect("financeiro_despesas")
+    fixas = [d for d in itens if d.tipo == Despesa.Tipo.FIXA]
+    variaveis = [d for d in itens if d.tipo == Despesa.Tipo.VARIAVEL]
+    return render(request, "estudio/financeiro_despesas.html", {
+        "fixas": fixas,
+        "variaveis": variaveis,
+        "total": brl(Despesa.total_mensal()),
+        "erro": erro,
+        "aba": "mais",
+    })
+
+
+@admin_required
+def financeiro_configurar(request):
+    """Configurar receitas (a antiga tela do Financeiro): preços, taxas, durações e débitos."""
     cfg = Configuracao.atual()
     form = FinanceiroForm(request.POST or None, instance=cfg)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Valores atualizados. Valem para os próximos agendamentos; os já marcados mantêm o preço da época.")
-        return redirect("financeiro")
+        return redirect("financeiro_configurar")
     abertos = Debito.objects.filter(quitado_em__isnull=True).select_related("cliente", "agendamento")
     quitados = Debito.objects.filter(quitado_em__isnull=False).select_related("cliente", "quitado_por").order_by("-quitado_em")[:20]
-    return render(request, "estudio/financeiro.html", {
+    return render(request, "estudio/financeiro_configurar.html", {
         "form": form,
         "abertos": abertos,
         "total_aberto": brl(abertos.aggregate(t=Sum("valor"))["t"] or 0),
@@ -50,7 +153,7 @@ def financeiro_quitar(request, pk):
     else:
         extra = "" if d.cliente.na_blacklist else f" {d.cliente} saiu da blacklist."
         messages.success(request, f"Débito de {brl(d.valor)} de {d.cliente} quitado.{extra}")
-    return redirect("financeiro")
+    return redirect("financeiro_configurar")
 
 
 # ---------- Estatísticas ----------

@@ -1,0 +1,27 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Receitas{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'financeiro' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Receitas</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:16px">
+<div class="linha">
+<a class="btn icone" style="border:0" href="?m={{ anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+<span style="font-weight:700;font-size:17px">{{ titulo }}</span>
+<a class="btn icone" style="border:0" href="?m={{ proxima }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>
+</div>
+<div class="lista">
+<div class="item"><span class="item-txt"><b>Ensaios</b><span class="sub" style="font-size:12.5px">{{ qtd_ensaios }} no mês</span></span><span style="font-weight:700">{{ valor_ensaio }}</span></div>
+<div class="item"><span class="item-txt"><b>Gravações</b><span class="sub" style="font-size:12.5px">{{ qtd_gravacoes }} no mês</span></span><span style="font-weight:700">{{ valor_grav }}</span></div>
+<div class="item"><span class="item-txt"><b>Total de receitas</b></span><span style="font-weight:700;color:var(--ouro)">{{ receita }}</span></div>
+</div>
+<div class="card{% if negativo %} perigo{% endif %}" style="display:flex;flex-direction:column;gap:8px">
+<span class="kicker">Receita − despesa</span>
+<div class="linha"><span class="sub">Receitas</span><span>{{ receita }}</span></div>
+<div class="linha"><span class="sub">Despesas do mês</span><span>− {{ despesas }}</span></div>
+<div class="linha" style="border-top:1px solid var(--linha);padding-top:8px"><b>Total</b><span class="num" style="color:{% if negativo %}var(--perigo){% else %}var(--ouro){% endif %}">{% if negativo %}− {% endif %}{{ resultado }}</span></div>
+</div>
+<p class="sub" style="margin:0;font-size:12.5px">Valor estimado dos ensaios e gravações ativos do mês (o mesmo das Estatísticas). Despesas pela média mensal cadastrada em Despesas.</p>
+<a class="btn" href="{% url 'financeiro_configurar' %}">Configurar receitas</a>
+</main>
+{% endblock %}
