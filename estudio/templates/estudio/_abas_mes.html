@@ -1,2 +1,5 @@
-<nav class="abas-mes" aria-label="Mês">{% for a in abas %}<a href="?m={{ a.valor }}"{% if a.ativo %} class="on" aria-current="page"{% endif %}>{{ a.rotulo }}</a>{% endfor %}</nav>
-<script>(()=>{const a=document.querySelector('.abas-mes .on');if(a)a.scrollIntoView({inline:'center',block:'nearest'})})()</script>
+<div class="linha">
+{% if nav.anterior %}<a class="btn icone" style="border:0" href="?m={{ nav.anterior }}" aria-label="Mês anterior"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>{% else %}<span class="btn icone" style="border:0;opacity:.25" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 18-6-6 6-6"/></svg></span>{% endif %}
+<span style="font-weight:700;font-size:17px">{{ nav.titulo }}</span>
+{% if nav.proxima %}<a class="btn icone" style="border:0" href="?m={{ nav.proxima }}" aria-label="Próximo mês"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a>{% else %}<span class="btn icone" style="border:0;opacity:.25" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></span>{% endif %}
+</div>

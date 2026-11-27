@@ -119,9 +119,14 @@ def _abas_meses(request):
             escolhido = pedido
     except ValueError:
         pass
-    abas = [{"valor": f"{b:%Y-%m}", "rotulo": rel.rotulo_mes(b), "ativo": b == escolhido} for b in meses]
+    i = meses.index(escolhido)  # meses vai do atual (0) ao mais antigo (11)
+    nav = {
+        "titulo": f"{MESES[escolhido.month - 1].capitalize()} {escolhido.year}",
+        "anterior": f"{meses[i + 1]:%Y-%m}" if i + 1 < len(meses) else "",
+        "proxima": f"{meses[i - 1]:%Y-%m}" if i > 0 else "",
+    }
     ini, fim = rel._intervalo(escolhido)
-    return abas, escolhido, ini, fim
+    return nav, escolhido, ini, fim
 
 
 def _por_dia(itens, quando):
@@ -156,7 +161,7 @@ ESTILO_TIPO = {
 @admin_required
 def auditoria_agendamentos(request):
     aud.limpar_antigos()
-    abas, escolhido, ini, fim = _abas_meses(request)
+    nav, escolhido, ini, fim = _abas_meses(request)
     registros = aud.registros_de_agendamentos(ini, fim)
     for r in registros:
         r.rotulo_tipo, r.estilo = ESTILO_TIPO.get(r.tipo, (r.get_tipo_display(), "cinza"))
@@ -165,7 +170,7 @@ def auditoria_agendamentos(request):
     for r in registros:
         contagem[r.rotulo_tipo] = contagem.get(r.rotulo_tipo, 0) + 1
     return render(request, "estudio/auditoria_agendamentos.html", {
-        "abas": abas, "mes": f"{MESES[escolhido.month - 1].capitalize()} {escolhido.year}",
+        "nav": nav, "mes": f"{MESES[escolhido.month - 1].capitalize()} {escolhido.year}",
         "dias": _por_dia(registros, lambda r: r.criado_em), "total": len(registros),
         "contagem": sorted(contagem.items(), key=lambda kv: -kv[1]),
         "aba": "mais",
@@ -175,7 +180,7 @@ def auditoria_agendamentos(request):
 @admin_required
 def auditoria_acessos(request):
     aud.limpar_antigos()
-    abas, escolhido, ini, fim = _abas_meses(request)
+    nav, escolhido, ini, fim = _abas_meses(request)
     acessos = list(Acesso.objects.filter(inicio__gte=ini, inicio__lt=fim).select_related("usuario"))
     feitos = list(Notificacao.objects.filter(criado_em__gte=ini - timedelta(hours=1), criado_em__lt=fim + timedelta(hours=1),
                                              autor__isnull=False).order_by("criado_em"))
@@ -196,7 +201,7 @@ def auditoria_acessos(request):
         r = resumo.setdefault(a.nome, {"nome": a.nome, "n": 0})
         r["n"] += 1
     return render(request, "estudio/auditoria_acessos.html", {
-        "abas": abas, "mes": f"{MESES[escolhido.month - 1].capitalize()} {escolhido.year}",
+        "nav": nav, "mes": f"{MESES[escolhido.month - 1].capitalize()} {escolhido.year}",
         "dias": _por_dia(acessos, lambda a: a.inicio), "total": len(acessos),
         "resumo": sorted(resumo.values(), key=lambda r: -r["n"]),
         "aba": "mais",

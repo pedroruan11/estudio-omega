@@ -6,7 +6,7 @@
 {% block conteudo %}
 <main class="conteudo" style="gap:14px">
 {% include "estudio/_abas_mes.html" %}
-<div class="linha"><span style="font-weight:700">{{ mes }}</span><span class="rotulo">{{ total }} registro{{ total|pluralize }}</span></div>
+<span class="rotulo" style="text-align:center;margin-top:-6px">{{ total }} registro{{ total|pluralize }} no mês</span>
 {% if contagem %}<div style="display:flex;flex-wrap:wrap;gap:6px">{% for nome, n in contagem %}<span class="pilula cinza">{{ nome }} · {{ n }}</span>{% endfor %}</div>{% endif %}
 {% for d in dias %}
 <span class="kicker">{{ d.dia|date:"l, d/m" }}</span>

@@ -1317,3 +1317,17 @@ class SoAdministradorTest(Base):
         self.assertFalse(self.edicao.is_staff)
         self.client.force_login(self.edicao)
         self.assertNotEqual(self.client.get("/admin/").status_code, 200)
+
+
+class AuditoriaNavegacaoMesTest(Base):
+    def test_setas_param_no_limite_de_12_meses(self):
+        from .auditoria import ultimos_meses
+        self.client.force_login(self.admin)
+        meses = ultimos_meses()
+        r = self.client.get(reverse("auditoria_acessos"))
+        self.assertEqual(r.context["nav"]["proxima"], "")  # mês atual: não tem próximo
+        self.assertEqual(r.context["nav"]["anterior"], f"{meses[-2]:%Y-%m}")
+        r = self.client.get(reverse("auditoria_agendamentos") + f"?m={meses[0]:%Y-%m}")
+        self.assertEqual(r.context["nav"]["anterior"], "")  # 12º mês: não volta mais
+        r = self.client.get(reverse("auditoria_agendamentos") + "?m=1999-01")  # fora do período: mês atual
+        self.assertEqual(r.context["nav"]["proxima"], "")

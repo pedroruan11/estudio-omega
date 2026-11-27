@@ -6,7 +6,7 @@
 {% block conteudo %}
 <main class="conteudo" style="gap:14px">
 {% include "estudio/_abas_mes.html" %}
-<div class="linha"><span style="font-weight:700">{{ mes }}</span><span class="rotulo">{{ total }} acesso{{ total|pluralize }}</span></div>
+<span class="rotulo" style="text-align:center;margin-top:-6px">{{ total }} acesso{{ total|pluralize }} no mês</span>
 {% if resumo %}<div style="display:flex;flex-wrap:wrap;gap:6px">{% for r in resumo %}<span class="pilula cinza">{{ r.nome }} · {{ r.n }}</span>{% endfor %}</div>{% endif %}
 {% for d in dias %}
 <span class="kicker">{{ d.dia|date:"l, d/m" }}</span>
