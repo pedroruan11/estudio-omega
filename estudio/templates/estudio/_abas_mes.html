@@ -1,0 +1,2 @@
+<nav class="abas-mes" aria-label="Mês">{% for a in abas %}<a href="?m={{ a.valor }}"{% if a.ativo %} class="on" aria-current="page"{% endif %}>{{ a.rotulo }}</a>{% endfor %}</nav>
+<script>(()=>{const a=document.querySelector('.abas-mes .on');if(a)a.scrollIntoView({inline:'center',block:'nearest'})})()</script>

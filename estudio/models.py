@@ -525,3 +525,22 @@ class Backup(models.Model):
     @property
     def nome_arquivo(self):
         return f"omega-backup-{timezone.localtime(self.criado_em):%Y-%m-%d_%H%M}.json.gz"
+
+
+class Acesso(models.Model):
+    """Auditoria → Acessos: cada vez que alguém usa o sistema (sessão de uso; 30 min parado = novo acesso).
+    Guardado por 12 meses."""
+
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name="acessos")
+    inicio = models.DateTimeField(db_index=True)
+    ultimo = models.DateTimeField()
+    com_senha = models.BooleanField(default=False, help_text="Começou digitando usuário e senha (login).")
+    dispositivo = models.CharField(max_length=40, blank=True)
+    ip = models.CharField(max_length=45, blank=True)
+    acoes = models.JSONField(default=list, blank=True, help_text='[{"h": "21:05", "t": "salvou as despesas"}, ...]')
+
+    class Meta:
+        ordering = ["-inicio"]
+
+    def __str__(self):
+        return f"{self.usuario} · {self.inicio:%d/%m %H:%M}"

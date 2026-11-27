@@ -49,6 +49,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "estudio.middleware.PrimeiroAcessoMiddleware",
+    "estudio.middleware.AcessoMiddleware",
 ]
 
 ROOT_URLCONF = "omega.urls"

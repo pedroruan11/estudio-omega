@@ -1,0 +1,24 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Auditoria · Acessos{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'auditoria' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Acessos</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:14px">
+{% include "estudio/_abas_mes.html" %}
+<div class="linha"><span style="font-weight:700">{{ mes }}</span><span class="rotulo">{{ total }} acesso{{ total|pluralize }}</span></div>
+{% if resumo %}<div style="display:flex;flex-wrap:wrap;gap:6px">{% for r in resumo %}<span class="pilula cinza">{{ r.nome }} · {{ r.n }}</span>{% endfor %}</div>{% endif %}
+{% for d in dias %}
+<span class="kicker">{{ d.dia|date:"l, d/m" }}</span>
+<div class="lista">{% for a in d.itens %}
+<div class="registro">
+<div class="linha"><span style="font-weight:700">{{ a.nome }}</span><span style="font-variant-numeric:tabular-nums;font-weight:600">{{ a.inicio|time:"H:i" }}–{{ a.ultimo|time:"H:i" }}</span></div>
+<span class="rotulo">{{ a.dispositivo|default:"—" }} · {{ a.duracao }}{% if a.com_senha %} · entrou com senha{% endif %}</span>
+{% if a.feito %}<ul class="feito">{% for f in a.feito %}<li><span>{{ f.h }}</span>{{ f.t }}</li>{% endfor %}</ul>{% else %}<span class="rotulo" style="font-style:italic">Só consultou</span>{% endif %}
+</div>{% endfor %}</div>
+{% empty %}
+<div class="card"><span class="sub">Nenhum acesso registrado em {{ mes }}.</span></div>
+{% endfor %}
+<p class="sub" style="margin:0;font-size:12.5px">Um acesso começa quando a pessoa abre o sistema e termina depois de 30 min parado. Registro a partir de 26/11/2026.</p>
+</main>
+{% endblock %}

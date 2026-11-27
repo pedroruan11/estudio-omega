@@ -1,0 +1,23 @@
+{% extends "estudio/base.html" %}
+{% block titulo %}Auditoria · Agendamentos{% endblock %}
+{% block topo %}
+<header class="topo compacto"><a class="voltar" href="{% url 'auditoria' %}" aria-label="Voltar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a><h1>Agendamentos</h1></header>
+{% endblock %}
+{% block conteudo %}
+<main class="conteudo" style="gap:14px">
+{% include "estudio/_abas_mes.html" %}
+<div class="linha"><span style="font-weight:700">{{ mes }}</span><span class="rotulo">{{ total }} registro{{ total|pluralize }}</span></div>
+{% if contagem %}<div style="display:flex;flex-wrap:wrap;gap:6px">{% for nome, n in contagem %}<span class="pilula cinza">{{ nome }} · {{ n }}</span>{% endfor %}</div>{% endif %}
+{% for d in dias %}
+<span class="kicker">{{ d.dia|date:"l, d/m" }}</span>
+<div class="lista">{% for r in d.itens %}
+<a class="registro" href="{% if r.agendamento_id %}{% url 'agendamento' r.agendamento_id %}{% elif r.cliente_id %}{% url 'cliente' r.cliente_id %}{% else %}#{% endif %}" style="text-decoration:none;color:var(--txt)">
+<div class="linha"><span style="font-weight:700">{{ r.cliente|default:"—" }}</span><span class="pilula {{ r.estilo }}">{{ r.rotulo_tipo }}</span></div>
+<span style="font-size:13.5px;color:var(--txt2)">{{ r.texto }}</span>
+<span class="rotulo">{{ r.criado_em|date:"d/m/Y" }} às {{ r.criado_em|time:"H:i" }} · por <b style="color:var(--txt2)">{{ r.quem }}</b></span>
+</a>{% endfor %}</div>
+{% empty %}
+<div class="card"><span class="sub">Nada registrado em {{ mes }}.</span></div>
+{% endfor %}
+</main>
+{% endblock %}

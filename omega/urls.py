@@ -4,6 +4,7 @@ from django.urls import path
 
 from estudio import views as v
 from estudio import views_gestao as g
+from estudio import views_relatorios as r
 
 urlpatterns = [
     path("", v.inicio, name="inicio"),
@@ -57,6 +58,12 @@ urlpatterns = [
     path("financeiro/despesas/", g.financeiro_despesas, name="financeiro_despesas"),
     path("financeiro/debitos/<int:pk>/quitar/", g.financeiro_quitar, name="financeiro_quitar"),
     path("estatisticas/", g.estatisticas, name="estatisticas"),
+    path("relatorios/", r.relatorios, name="relatorios"),
+    path("relatorios/ensaios/", r.relatorio_ensaios, name="relatorio_ensaios"),
+    path("relatorios/receitas-despesas/", r.relatorio_receitas, name="relatorio_receitas"),
+    path("auditoria/", r.auditoria, name="auditoria"),
+    path("auditoria/agendamentos/", r.auditoria_agendamentos, name="auditoria_agendamentos"),
+    path("auditoria/acessos/", r.auditoria_acessos, name="auditoria_acessos"),
     path("configuracoes/", g.configuracoes, name="configuracoes"),
     path("configuracoes/usuarios/novo/", g.usuario_novo, name="usuario_novo"),
     path("configuracoes/usuarios/<int:pk>/", g.usuario_editar, name="usuario_editar"),

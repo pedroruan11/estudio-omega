@@ -1,0 +1,33 @@
+<div class="grafico" data-grafico>
+<div class="legenda">{% for s in g.series %}<span><i style="background:{{ s.cor }}"></i>{{ s.nome }}</span>{% endfor %}</div>
+<svg viewBox="0 0 {{ g.largura }} {{ g.altura }}" role="img" aria-label="Gráfico de linha: {% for s in g.series %}{{ s.nome }}{% if not forloop.last %}, {% endif %}{% endfor %} nos últimos 12 meses">
+{% for t in g.ticks %}<line x1="{{ g.esq }}" x2="{{ g.dir }}" y1="{{ t.y }}" y2="{{ t.y }}" stroke="{% if t.zero %}#5A534C{% else %}#2B2724{% endif %}" stroke-width="1"{% if not t.zero %} stroke-dasharray="2 4"{% endif %}/>
+<text x="{{ t.x_rot }}" y="{{ t.y }}" dy="3.5" text-anchor="end" fill="#8C847A" font-size="9.5" font-family="Inter,sans-serif">{{ t.rotulo }}</text>{% endfor %}
+{% for c in g.colunas %}{% if c.mostrar %}<text x="{{ c.x }}" y="{{ g.base_rotulos }}" text-anchor="middle" fill="#8C847A" font-size="9.5" font-family="Inter,sans-serif">{{ c.rotulo }}</text>{% endif %}{% endfor %}
+<line data-mira x1="0" x2="0" y1="{{ g.topo }}" y2="{{ g.chao }}" stroke="#A8A096" stroke-width="1" visibility="hidden"/>
+{% for s in g.series %}<path d="{{ s.caminho }}" fill="none" stroke="{{ s.cor }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+{% for p in s.pontos %}<circle data-ponto="{{ forloop.counter0 }}" cx="{{ p.x }}" cy="{{ p.y }}" r="{% if forloop.last %}4{% else %}2.5{% endif %}" fill="{{ s.cor }}" stroke="#141312" stroke-width="2"/>{% endfor %}{% endfor %}
+{% for c in g.colunas %}<rect data-col="{{ forloop.counter0 }}" data-x="{{ c.x }}" x="{{ c.x }}" y="{{ g.topo }}" width="1" height="{{ g.chao }}" fill="transparent"/>{% endfor %}
+</svg>
+<div class="dica" data-dica></div>
+{{ dicas|json_script:"dicas-grafico" }}
+</div>
+<script>
+(()=>{
+const box=document.querySelector('[data-grafico]'),svg=box.querySelector('svg'),dica=box.querySelector('[data-dica]'),mira=svg.querySelector('[data-mira]');
+const dados=JSON.parse(document.getElementById('dicas-grafico').textContent);
+const cols=[...svg.querySelectorAll('[data-col]')];const xs=cols.map(c=>+c.dataset.x);
+const half=xs.length>1?(xs[1]-xs[0])/2:20;cols.forEach((c,i)=>{c.setAttribute('x',xs[i]-half);c.setAttribute('width',half*2)});
+function mostrar(i){const d=dados[i];if(!d)return;
+  mira.setAttribute('x1',xs[i]);mira.setAttribute('x2',xs[i]);mira.setAttribute('visibility','visible');
+  svg.querySelectorAll('[data-ponto]').forEach(p=>p.setAttribute('r',+p.dataset.ponto===i?5:(+p.dataset.ponto===xs.length-1?4:2.5)));
+  dica.innerHTML='<b>'+d.rotulo+'</b>'+d.linhas.map(l=>'<div>'+l.replace(/</g,'&lt;')+'</div>').join('');
+  dica.style.display='block';
+  const rs=svg.getBoundingClientRect(),rb=box.getBoundingClientRect(),esc=rs.width/svg.viewBox.baseVal.width,bx=rs.left-rb.left+xs[i]*esc;
+  const w=dica.offsetWidth,meio=xs[i]>svg.viewBox.baseVal.width/2;dica.style.left=Math.max(4,Math.min(box.clientWidth-w-4,meio?bx-w-12:bx+12))+'px';dica.style.top=(rs.top-rb.top+8)+'px';}
+function esconder(){dica.style.display='none';mira.setAttribute('visibility','hidden');svg.querySelectorAll('[data-ponto]').forEach(p=>p.setAttribute('r',+p.dataset.ponto===xs.length-1?4:2.5))}
+cols.forEach((c,i)=>{c.addEventListener('pointerenter',()=>mostrar(i));c.addEventListener('pointerdown',()=>mostrar(i))});
+svg.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')esconder()});
+document.addEventListener('pointerdown',e=>{if(!box.contains(e.target))esconder()});
+})();
+</script>

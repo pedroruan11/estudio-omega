@@ -1202,3 +1202,82 @@ class FinanceiroReceitasDespesasTest(Base):
         r = self.client.get(reverse("financeiro"))
         self.assertContains(r, reverse("financeiro_receitas"))
         self.assertContains(r, reverse("financeiro_despesas"))
+
+
+class RelatoriosAuditoriaTest(Base):
+    """Relatórios (gráfico + Excel) e Auditoria (agendamentos e acessos), 26/11/2026."""
+
+    PAGINAS = ["relatorios", "relatorio_ensaios", "relatorio_receitas", "auditoria", "auditoria_agendamentos", "auditoria_acessos"]
+
+    def test_so_admin(self):
+        self.client.force_login(self.edicao)
+        for nome in self.PAGINAS:
+            self.assertEqual(self.client.get(reverse(nome)).status_code, 403, nome)
+        self.client.force_login(self.admin)
+        for nome in self.PAGINAS:
+            self.assertEqual(self.client.get(reverse(nome)).status_code, 200, nome)
+
+    def test_menu_tem_relatorios_e_auditoria(self):
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("mais"))
+        self.assertContains(r, reverse("relatorios"))
+        self.assertContains(r, reverse("auditoria"))
+
+    def test_relatorio_ensaios_conta_mes_atual_e_exporta(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+        hoje = timezone.localdate()
+        amanha = timezone.now() + timedelta(days=1)
+        if timezone.localdate(amanha).month != hoje.month:
+            self.skipTest("virada de mês")
+        regras.criar_agendamento(self.admin, self.fire, "ensaio", timezone.localdate(amanha), 18, 2)
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("relatorio_ensaios"))
+        self.assertEqual(r.context["linhas"][0]["c"][1], 1)
+        self.assertContains(r, "<svg")
+        x = self.client.get(reverse("relatorio_ensaios") + "?formato=xlsx")
+        self.assertIn("spreadsheetml", x["Content-Type"])
+        ws = load_workbook(BytesIO(x.content)).active
+        self.assertEqual(ws.max_row, 13)  # cabeçalho + 12 meses
+        self.assertEqual(ws.cell(13, 2).value, 1)
+
+    def test_relatorio_receitas_resultado_negativo(self):
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("relatorio_receitas"))
+        self.assertTrue(r.context["linhas"][0]["neg"])  # sem receitas, só as despesas (R$ 3.550)
+        self.assertContains(r, "− R$ 3.550")
+        x = self.client.get(reverse("relatorio_receitas") + "?formato=xlsx")
+        self.assertEqual(x.status_code, 200)
+
+    def test_auditoria_agendamentos_sem_duplicar(self):
+        amanha = timezone.localdate() + timedelta(days=2)
+        ag = regras.criar_agendamento(self.edicao, self.fire, "ensaio", amanha, 18, 2, responsavel=self.admin)
+        regras.cancelar(self.edicao, ag)
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse("auditoria_agendamentos") + "?m=" + timezone.localdate().strftime("%Y-%m"))
+        self.assertEqual(r.context["total"], 2)  # agendou + cancelou (o convite pessoal não repete)
+        self.assertContains(r, "Cancelou")
+        self.assertContains(r, "colab")
+
+    def test_acessos_registram_login_e_acao(self):
+        self.client.post(reverse("login"), {"username": "pedro", "password": "x"})
+        from .models import Acesso, Despesa
+        self.assertEqual(Acesso.objects.filter(usuario=self.admin, com_senha=True).count(), 1)
+        dados = {f"valor-{d.pk}": str(d.valor) for d in Despesa.objects.filter(em_breve=False)}
+        self.client.post(reverse("financeiro_despesas"), dados)
+        a = Acesso.objects.get(usuario=self.admin)
+        self.assertEqual([x["t"] for x in a.acoes], ["salvou as despesas"])
+        r = self.client.get(reverse("auditoria_acessos"))
+        self.assertContains(r, "salvou as despesas")
+        self.assertContains(r, "entrou com senha")
+
+    def test_guarda_so_12_meses(self):
+        from .auditoria import limpar_antigos
+        from .models import Acesso
+        velho = timezone.now() - timedelta(days=400)
+        Acesso.objects.create(usuario=self.admin, inicio=velho, ultimo=velho)
+        n = Notificacao.objects.create(autor=self.admin, tipo="agendou", texto="antigo")
+        Notificacao.objects.filter(pk=n.pk).update(criado_em=velho)
+        limpar_antigos()
+        self.assertFalse(Acesso.objects.exists())
+        self.assertFalse(Notificacao.objects.filter(pk=n.pk).exists())

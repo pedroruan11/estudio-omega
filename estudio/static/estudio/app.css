@@ -238,3 +238,25 @@ nav.barra>a.fab:active{background:var(--ouro2)}
 .mes a.trav .cad{width:11px;height:11px;color:var(--ouro)}
 .lm-linha.trav .lm-cliente{color:var(--mute)}
 .btn-travar{color:var(--ouro)}
+/* Relatórios e Auditoria (26/11/2026) */
+.abas-mes{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:2px 20px 4px;-webkit-overflow-scrolling:touch}
+.abas-mes::-webkit-scrollbar{display:none}
+.abas-mes a{flex-shrink:0;min-height:38px;padding:0 14px;border-radius:99px;border:1px solid var(--linha);background:var(--s1);color:var(--txt2);font:600 14px Inter,sans-serif;display:flex;align-items:center;text-decoration:none}
+.abas-mes a.on{background:var(--ouro);border-color:var(--ouro);color:#0A0A0A;font-weight:700}
+.grafico{position:relative;background:var(--s1);border:1px solid var(--linha);border-radius:18px;padding:14px 10px 10px}
+.grafico svg{display:block;width:100%;height:auto;touch-action:pan-y}
+.grafico .legenda{display:flex;flex-wrap:wrap;gap:14px;padding:0 6px 8px;font-size:12.5px;color:var(--txt2)}
+.grafico .legenda i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.grafico .dica{position:absolute;pointer-events:none;background:#0A0A0A;border:1px solid var(--linha);border-radius:10px;padding:8px 10px;font-size:12.5px;color:var(--txt);white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.5);display:none;z-index:2}
+.grafico .dica b{display:block;margin-bottom:2px}
+.tabela{width:100%;border-collapse:collapse;font-size:13.5px}
+.tabela th{font:600 11.5px Inter,sans-serif;letter-spacing:.6px;text-transform:uppercase;color:var(--mute);text-align:right;padding:10px 8px;border-bottom:1px solid var(--linha)}
+.tabela td{text-align:right;padding:11px 8px;border-bottom:1px solid var(--linha);font-variant-numeric:tabular-nums}
+.tabela th:first-child,.tabela td:first-child{text-align:left;padding-left:14px}
+.tabela th:last-child,.tabela td:last-child{padding-right:14px}
+.tabela tr:last-child td{border-bottom:0}
+.tabela td.neg{color:var(--perigo)}
+.registro,.lista>a.registro{display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:12px 16px;border-bottom:1px solid var(--linha)}
+.registro:last-child{border-bottom:0}
+.registro .feito{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--txt2)}
+.registro .feito span{color:var(--mute);font-variant-numeric:tabular-nums;margin-right:6px}
