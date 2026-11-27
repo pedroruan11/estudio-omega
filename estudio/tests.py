@@ -1281,3 +1281,39 @@ class RelatoriosAuditoriaTest(Base):
         limpar_antigos()
         self.assertFalse(Acesso.objects.exists())
         self.assertFalse(Notificacao.objects.filter(pk=n.pk).exists())
+
+
+class SoAdministradorTest(Base):
+    """Regra do Pedro (26/11/2026): Financeiro, Estatísticas, Relatórios e Auditoria só para Administrador
+    (Pedro e Fábio). Edição não vê no menu e leva 403 se tentar abrir pelo endereço — inclusive o Excel."""
+
+    ROTAS = [
+        "financeiro", "financeiro_receitas", "financeiro_despesas", "financeiro_configurar", "estatisticas",
+        "relatorios", "relatorio_ensaios", "relatorio_receitas", "auditoria", "auditoria_agendamentos", "auditoria_acessos",
+    ]
+
+    def test_edicao_barrado_em_tudo(self):
+        self.client.force_login(self.edicao)
+        for nome in self.ROTAS:
+            self.assertEqual(self.client.get(reverse(nome)).status_code, 403, nome)
+            self.assertEqual(self.client.post(reverse(nome), {}).status_code, 403, nome)
+        for nome in ("relatorio_ensaios", "relatorio_receitas"):
+            self.assertEqual(self.client.get(reverse(nome) + "?formato=xlsx").status_code, 403, nome)
+
+    def test_edicao_nao_ve_no_menu(self):
+        self.client.force_login(self.edicao)
+        r = self.client.get(reverse("mais"))
+        for nome in ("financeiro", "estatisticas", "relatorios", "auditoria"):
+            self.assertNotContains(r, f'href="{reverse(nome)}"')
+
+    def test_sem_login_vai_pro_login(self):
+        for nome in self.ROTAS:
+            r = self.client.get(reverse(nome))
+            self.assertEqual(r.status_code, 302, nome)
+            self.assertIn(reverse("login"), r["Location"])
+
+    def test_edicao_nao_entra_no_painel_django(self):
+        self.edicao.refresh_from_db()
+        self.assertFalse(self.edicao.is_staff)
+        self.client.force_login(self.edicao)
+        self.assertNotEqual(self.client.get("/admin/").status_code, 200)
